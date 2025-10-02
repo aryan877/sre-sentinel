@@ -14,6 +14,7 @@
 **DevOps downtime costs companies $300K/hour on average.**
 
 Traditional monitoring tools:
+
 - ❌ Alert you AFTER things break
 - ❌ Require manual diagnosis and fixes
 - ❌ Wake up engineers at 3 AM
@@ -22,12 +23,14 @@ Traditional monitoring tools:
 ## 💡 The Solution
 
 **SRE Sentinel** is an autonomous AI agent that:
+
 - ✅ **Detects** anomalies in real-time using ultra-fast inference
 - ✅ **Diagnoses** root causes by analyzing entire system context
 - ✅ **Heals** issues automatically via secure container orchestration
 - ✅ **Explains** everything in natural language
 
 ### Watch it in action:
+
 ```
 1. Service crashes ⚠️
 2. Cerebras detects anomaly in <1 second ⚡
@@ -41,6 +44,7 @@ Traditional monitoring tools:
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Docker Desktop (running)
 - Python 3.11+ and Node.js 20+
 - [Cerebras API key](https://cloud.cerebras.ai) (free)
@@ -96,14 +100,14 @@ graph TB
 
 ### Tech Stack
 
-| Component | Technology | Why? |
-|-----------|-----------|------|
-| **Fast Anomaly Detection** | Cerebras API | Processes 2,600 tokens/sec - analyzes 100K log lines in <1 sec |
-| **Deep Root Cause Analysis** | Llama 4 Scout | 10M token context holds entire system state (logs + code + configs) |
-| **Secure Orchestration** | Docker MCP Gateway | Safely executes fixes via isolated, monitored tool calls |
-| **Backend** | Python + FastAPI | Async streaming, Docker SDK integration |
-| **Dashboard** | React + Vite + TailwindCSS | Real-time WebSocket updates, beautiful UX |
-| **Monitoring** | Docker SDK | Native container log streaming |
+| Component                    | Technology                 | Why?                                                                |
+| ---------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| **Fast Anomaly Detection**   | Cerebras API               | Processes 2,600 tokens/sec - analyzes 100K log lines in <1 sec      |
+| **Deep Root Cause Analysis** | Llama 4 Scout              | 10M token context holds entire system state (logs + code + configs) |
+| **Secure Orchestration**     | Docker MCP Gateway         | Safely executes fixes via isolated, monitored tool calls            |
+| **Backend**                  | Python + FastAPI           | Async streaming, Docker SDK integration                             |
+| **Dashboard**                | React + Vite + TailwindCSS | Real-time WebSocket updates, beautiful UX                           |
+| **Monitoring**               | Docker SDK                 | Native container log streaming                                      |
 
 ---
 
@@ -140,11 +144,13 @@ sre-sentinel/
 ## 🎬 Demo Scenario
 
 ### Break the Service
+
 ```bash
 ./scripts/break-service.sh
 ```
 
 Choose a failure scenario:
+
 1. Kill Postgres (connection failures)
 2. Trigger memory leak (OOM crash)
 3. Remove environment variable (config error)
@@ -155,6 +161,7 @@ Choose a failure scenario:
 **Within 30 seconds:**
 
 1. **Detection** (Cerebras)
+
    ```
    ⚡ Anomaly detected in 0.8 seconds
    Service: postgres-db
@@ -163,6 +170,7 @@ Choose a failure scenario:
    ```
 
 2. **Diagnosis** (Llama 4 Scout)
+
    ```
    🧠 Analyzing 50,000 log lines + docker-compose.yml...
 
@@ -178,6 +186,7 @@ Choose a failure scenario:
    ```
 
 3. **Healing** (Docker MCP Gateway)
+
    ```
    🔧 Executing fix via MCP Gateway...
 
@@ -247,13 +256,13 @@ result = await orchestrator.execute_fix({
 
 ## 📊 Performance Metrics
 
-| Metric | Value |
-|--------|-------|
-| Anomaly detection latency | <1 second |
-| Root cause analysis | 3-5 seconds (even with 1M+ tokens) |
-| Auto-healing time | 10-15 seconds |
-| False positive rate | <2% |
-| Dashboard real-time lag | <100ms |
+| Metric                    | Value                              |
+| ------------------------- | ---------------------------------- |
+| Anomaly detection latency | <1 second                          |
+| Root cause analysis       | 3-5 seconds (even with 1M+ tokens) |
+| Auto-healing time         | 10-15 seconds                      |
+| False positive rate       | <2%                                |
+| Dashboard real-time lag   | <100ms                             |
 
 ---
 
@@ -272,27 +281,30 @@ result = await orchestrator.execute_fix({
 
 ### How SRE Sentinel Excels
 
-| Criteria | Our Solution |
-|----------|-------------|
-| **Potential Impact** | Solves $300K/hour downtime problem; applicable to any containerized infrastructure |
+| Criteria                     | Our Solution                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Potential Impact**         | Solves $300K/hour downtime problem; applicable to any containerized infrastructure                     |
 | **Creativity & Originality** | First to combine Cerebras speed + Llama long-context + Docker MCP orchestration for autonomous healing |
-| **Technical Implementation** | Real-time streaming, multi-AI coordination, secure container control, production-ready code |
-| **Learning & Growth** | Pushes boundaries of agentic AI, demonstrates advanced Docker/MCP integration |
-| **Aesthetics & UX** | Beautiful real-time dashboard, natural language explanations for non-engineers |
+| **Technical Implementation** | Real-time streaming, multi-AI coordination, secure container control, production-ready code            |
+| **Learning & Growth**        | Pushes boundaries of agentic AI, demonstrates advanced Docker/MCP integration                          |
+| **Aesthetics & UX**          | Beautiful real-time dashboard, natural language explanations for non-engineers                         |
 
 ### Sponsor Technology Integration
 
 #### Cerebras ⚡
+
 - **Unique capability:** 2,600 tokens/sec inference speed
 - **Why it matters:** Analyze 100K log lines in <1 second for instant anomaly detection
 - **Code:** `cerebras_client.py` - streaming inference with `reasoning_effort` parameter
 
 #### Llama 4 Scout 🧠
+
 - **Unique capability:** 10M token context window
 - **Why it matters:** Hold entire system state (logs + configs + code) in memory for holistic reasoning
 - **Code:** `llama_analyzer.py` - passes 1M+ token contexts for deep diagnosis
 
 #### Docker MCP Gateway 🔧
+
 - **Unique capability:** Secure orchestration of containerized tools
 - **Why it matters:** AI can safely control infrastructure with monitoring, isolation, and audit logs
 - **Code:** `mcp_orchestrator.py` + custom servers in `mcp-servers/`
@@ -310,6 +322,7 @@ MIT License - see [LICENSE](./LICENSE)
 Built for the [FutureStack GenAI Hackathon](https://www.wemakedevs.org/hackathons/futurestack25)
 
 Powered by:
+
 - [Cerebras](https://cerebras.ai) - World's fastest AI inference
 - [Meta Llama 4](https://llama.meta.com) - Open-source LLM with 10M context
 - [Docker MCP Gateway](https://docker.com) - Secure AI tool orchestration
