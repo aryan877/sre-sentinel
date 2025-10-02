@@ -1,0 +1,14 @@
+{
+  "name": "mcp-docker-control",
+  "version": "1.0.0",
+  "description": "MCP server for secure Docker container control",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dockerode": "^4.0.2"
+  }
+}

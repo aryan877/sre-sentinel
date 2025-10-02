@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  # Demo microservice: Simple Node.js API
+  api:
+    image: node:20-alpine
+    container_name: demo-api
+    working_dir: /app
+    command: sh -c "npm install express && node server.js"
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-demo_password}@postgres:5432/${POSTGRES_DB:-demo_db}
+    volumes:
+      - ./demo-app/server.js:/app/server.js
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    labels:
+      - "sre-sentinel.monitor=true"
+      - "sre-sentinel.service=api"
+    mem_limit: 256m
+    cpus: 0.5
+
+  # Demo database: PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: demo-postgres
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-demo_password}
+      - POSTGRES_DB=${POSTGRES_DB:-demo_db}
+      - POSTGRES_MAX_CONNECTIONS=100
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    labels:
+      - "sre-sentinel.monitor=true"
+      - "sre-sentinel.service=postgres"
+    mem_limit: 256m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MCP Gateway for managing Docker containers
+  mcp-gateway:
+    image: docker/mcp-gateway:latest
+    container_name: mcp-gateway
+    command:
+      [
+        "--transport=streaming",
+        "--port=8811",
+        "--servers=docker-control,config-patcher",
+      ]
+    ports:
+      - "8811:8811"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./mcp-servers:/mcp-servers:ro
+    restart: unless-stopped
+
+  # SRE Sentinel monitoring agent
+  sre-sentinel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sre-sentinel
+    environment:
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - LLAMA_API_KEY=${LLAMA_API_KEY}
+      - LLAMA_API_BASE=${LLAMA_API_BASE:-https://openrouter.ai/api/v1}
+      - MCP_GATEWAY_URL=${MCP_GATEWAY_URL:-http://mcp-gateway:8811}
+      - API_PORT=${API_PORT:-8000}
+      - AUTO_HEAL_ENABLED=${AUTO_HEAL_ENABLED:-true}
+    ports:
+      - "8000:8000" # HTTP + WebSocket API
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./src:/app/src
+    depends_on:
+      - api
+      - postgres
+      - mcp-gateway
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: sre-sentinel-network
