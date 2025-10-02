@@ -1,180 +1,114 @@
 # 🚀 SRE Sentinel - Complete Setup & Run Guide
 
+## 🎯 System Overview
+
+SRE Sentinel is an AI-powered DevOps copilot that autonomously monitors, diagnoses, and heals infrastructure issues:
+
+- **Detects** anomalies in real-time using Cerebras AI (ultra-fast inference - 2,600 tokens/sec)
+- **Diagnoses** root causes using Llama 4 Scout (10M token context for holistic analysis)
+- **Heals** issues automatically via Docker MCP Gateway (secure orchestration)
+- **Displays** everything in a real-time React dashboard
+
+## 📋 Prerequisites
+
+### Required Software
+
+- **Docker Desktop** (running and accessible)
+- **Python 3.11+**
+- **Node.js 18+**
+- **Git**
+
+### Required API Keys
+
+1. **Cerebras API Key** (free tier available)
+   - Get from: https://cloud.cerebras.ai
+   - Used for ultra-fast anomaly detection (<1 second)
+2. **Llama API Key** (choose one):
+   - **OpenRouter** (recommended): https://openrouter.ai
+   - **Groq**: https://groq.com
+   - Used for deep root cause analysis (3-5 seconds)
+
 ---
 
-## Prerequisites
+## 🚀 Quick Start (15 minutes)
 
-✅ **Required:**
-
-- Docker Desktop (running)
-- Python 3.10+
-- Node.js 18+
-- API Keys:
-  - Cerebras API key (get from https://cerebras.ai/)
-  - Llama API key (OpenRouter or Groq)
-
----
-
-## Installation
-
-### Method 1: Automated Setup (Recommended)
+### Step 1: Clone and Setup
 
 ```bash
+# Clone the repository
 git clone <your-repo-url>
 cd sre-sentinel
 
-# Run automated setup
+# Run the automated setup script
 ./scripts/setup.sh
 ```
 
-This will:
+The setup script will:
 
-- Install Python dependencies
-- Install Node.js dependencies for MCP servers and dashboard
-- Create `.env` file from template
-- Build Docker containers
+- ✅ Check all prerequisites
+- ✅ Install Python dependencies
+- ✅ Install Node.js dependencies for dashboard and MCP servers
+- ✅ Build Docker containers
+- ✅ Create `.env` file from template
 
-### Method 2: Manual Setup
+### Step 2: Configure API Keys
 
-```bash
-# 1. Clone repo
-git clone <your-repo-url>
-cd sre-sentinel
-
-# 2. Environment setup
-cp .env.example .env
-# Edit .env and add your API keys
-
-# 3. Install Python dependencies
-cd src
-pip install -r requirements.txt
-cd ..
-
-# 4. Install MCP server dependencies
-cd mcp-servers/docker-control
-npm install
-cd ../config-patcher
-npm install
-cd ../..
-
-# 5. Install dashboard dependencies
-cd dashboard
-npm install
-cd ..
-```
-
----
-
-## Configuration
-
-### API Keys
-
-Edit `.env` and add your keys:
+Edit the `.env` file and add your API keys:
 
 ```env
 # Cerebras API Configuration
 CEREBRAS_API_KEY=your_cerebras_key_here
 CEREBRAS_MODEL=llama-4-scout-17b-16e-instruct
 
-# Llama 4 Scout Configuration (via OpenRouter or Groq)
-LLAMA_API_KEY=your_openrouter_or_groq_key_here
+# Llama 4 Scout Configuration (via OpenRouter)
+LLAMA_API_KEY=your_openrouter_key_here
 LLAMA_API_BASE=https://openrouter.ai/api/v1
-# Alternative: Use Groq
-# LLAMA_API_BASE=https://api.groq.com/openai/v1
 LLAMA_MODEL=meta-llama/llama-4-scout
 
-# Docker MCP Gateway Configuration
-MCP_GATEWAY_URL=http://localhost:8811
-MCP_GATEWAY_TRANSPORT=streaming
+# Or use Groq instead
+# LLAMA_API_KEY=your_groq_key_here
+# LLAMA_API_BASE=https://api.groq.com/openai/v1
+# LLAMA_MODEL=llama-3.1-70b-versatile
 
-# SRE Sentinel Configuration
+# Other settings (defaults are fine)
 API_PORT=8000
-LOG_LEVEL=INFO
 AUTO_HEAL_ENABLED=true
-MANUAL_APPROVAL_MODE=false
 ```
 
----
-
-## Running the System
-
-### Start Everything
+### Step 3: Start the System
 
 ```bash
-# 1. Start Docker infrastructure (includes MCP Gateway)
+# Start all Docker containers (includes MCP Gateway)
 docker-compose up -d
 
-# 2. Verify all containers are running
-docker-compose ps
-```
-
-You should see:
-
-- ✅ `mcp-gateway` (port 8811)
-- ✅ `demo-api` (port 3001)
-- ✅ `demo-postgres` (port 5432)
-- ✅ `sre-sentinel` (port 8000)
-
-```bash
-# 3. Start dashboard (in separate terminal)
+# Start the dashboard (in a new terminal)
 cd dashboard
 npm run dev
 ```
 
-Open **http://localhost:5173** to see the dashboard.
+### Step 4: Verify Everything is Working
+
+Open these URLs to verify components:
+
+- **Dashboard**: http://localhost:5173
+- **Demo API**: http://localhost:3001/health
+- **SRE Sentinel API**: http://localhost:8000/health
+- **MCP Gateway**: http://localhost:8811
+
+You should see:
+
+- ✅ Green container status cards in dashboard
+- ✅ Real-time metrics charts
+- ✅ Live log streaming
+- ✅ All health checks passing
 
 ---
 
-## System Verification
+## 🧪 Testing the System
 
-### Health Checks
+### Automated Testing (Recommended)
 
-```bash
-# Check Docker containers
-docker-compose ps
-
-# Check API health
-curl http://localhost:3001/health
-
-# Check SRE Sentinel API
-curl http://localhost:8000/health
-
-# Check MCP Gateway
-curl http://localhost:8811/health
-```
-
-### Expected Outputs
-
-**Demo API** (http://localhost:3001/health):
-
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-...",
-  "service": "demo-api"
-}
-```
-
-**SRE Sentinel API** (http://localhost:8000/health):
-
-```json
-{
-  "status": "healthy"
-}
-```
-
-**Dashboard**: Should show:
-
-- Container status cards (green)
-- Real-time metrics charts
-- Live log streams
-- AI insights panel
-
----
-
-## Testing the System
-
-### Use the Break Script
+Run the built-in test script:
 
 ```bash
 ./scripts/break-service.sh
@@ -182,16 +116,16 @@ curl http://localhost:8811/health
 
 Choose a failure scenario:
 
-1. **Kill Postgres** - Simulates database crash (connection failures)
+1. **Kill Postgres** - Simulates database crash
 2. **Memory leak** - Triggers OOM crash
 3. **Remove env var** - Creates configuration error
 4. **Max out CPU** - Causes performance issues
 
-### Watch SRE Sentinel Work
+### What to Expect
 
-You'll see (in ~30 seconds):
+Within 30 seconds, you'll see:
 
-1. **Detection** (Cerebras)
+1. **Detection** (Cerebras - <1 second)
 
    ```
    ⚡ Anomaly detected in 0.8 seconds
@@ -199,14 +133,14 @@ You'll see (in ~30 seconds):
    Confidence: 94%
    ```
 
-2. **Diagnosis** (Llama 4)
+2. **Diagnosis** (Llama 4 - 3-5 seconds)
 
    ```
    🧠 Analyzing 50,000 log lines...
-   Root Cause: Postgres crashed (OOM)
+   Root Cause: Postgres crashed due to OOM
    ```
 
-3. **Healing** (MCP Gateway)
+3. **Healing** (MCP Gateway - 10-15 seconds)
 
    ```
    🔧 Restarting container...
@@ -220,9 +154,10 @@ You'll see (in ~30 seconds):
 
 ### Manual Testing
 
-**Test 1: Kill a container**
+#### Test 1: Kill a Container
 
 ```bash
+# Kill postgres container
 docker kill demo-postgres
 
 # Watch SRE Sentinel detect and fix:
@@ -231,17 +166,17 @@ docker kill demo-postgres
 # 3. Restarts postgres container
 ```
 
-**Test 2: Memory leak**
+#### Test 2: Memory Leak
 
 ```bash
-# Trigger memory leak
-for i in {1..10}; do curl http://localhost:3001/leak; done
+# Trigger memory leak in demo API
+for i in {1..10}; do curl -s http://localhost:3001/leak; done
 
 # Watch container crash and auto-heal
 docker stats demo-api
 ```
 
-**Test 3: Database check**
+#### Test 3: Database Connection Issues
 
 ```bash
 # Stop postgres
@@ -255,74 +190,127 @@ curl http://localhost:3001/db-check
 
 ---
 
-## Component Details
+## 🏗️ System Architecture
 
-### Python Monitoring Server
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Docker        │    │   SRE Sentinel   │    │   Dashboard     │
+│   Containers    │───▶│   Core Engine    │───▶│   (React)       │
+│                 │    │                  │    │                 │
+│ • demo-api      │    │ • Anomaly Detect │    │ • Real-time UI  │
+│ • demo-postgres │    │ • Root Cause     │    │ • Metrics       │
+│ • mcp-gateway   │    │ • Auto-heal      │    │ • Logs          │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │   AI Services    │
+                       │                  │
+                       │ • Cerebras       │
+                       │ • Llama 4 Scout  │
+                       └──────────────────┘
+```
 
-**Location**: `src/monitor.py`
+### Key Components
 
-**What it does**:
+1. **Python Monitoring Server** ([`src/monitor.py`](src/monitor.py))
 
-- Monitors Docker containers with label `sre-sentinel.monitor=true`
-- Streams logs and collects metrics (CPU, memory, network)
-- Detects anomalies using Cerebras AI
-- Generates fix suggestions using Llama 4
-- Executes fixes via MCP servers
-- Broadcasts events via WebSocket
+   - Monitors Docker containers with `sre-sentinel.monitor=true` label
+   - Streams logs and collects metrics (CPU, memory, network)
+   - Detects anomalies and triggers healing
+   - Broadcasts events via WebSocket
 
-**Key files**:
+2. **Cerebras Client** ([`src/cerebras_client.py`](src/cerebras_client.py))
 
-- `src/monitor.py` - Main orchestrator
-- `src/cerebras_client.py` - Anomaly detection
-- `src/llama_analyzer.py` - Root cause analysis
-- `src/mcp_orchestrator.py` - Fix execution
-- `src/websocket_server.py` - Dashboard API
-- `src/event_bus.py` - Event broadcasting
+   - Ultra-fast anomaly detection (2,600 tokens/sec)
+   - Analyzes 100K log lines in <1 second
+   - Returns structured anomaly results with confidence scores
 
-### MCP Servers
+3. **Llama Analyzer** ([`src/llama_analyzer.py`](src/llama_analyzer.py))
 
-**Location**: `mcp-servers/`
+   - Deep root cause analysis with 10M token context
+   - Analyzes entire system state (logs + configs + code)
+   - Generates actionable fix suggestions
 
-The MCP Gateway (port 8811) manages two custom MCP servers:
+4. **MCP Orchestrator** ([`src/mcp_orchestrator.py`](src/mcp_orchestrator.py))
 
-**Docker Control Server** (`mcp-servers/docker-control/`):
+   - Secure execution of fixes via Docker MCP Gateway
+   - Isolates and monitors all AI actions
+   - Supports container restarts, config updates, resource scaling
 
-- `restart_container` - Restart containers
-- `health_check` - Check container health
-- `update_resources` - Modify CPU/memory limits
-- `get_logs` - Fetch container logs
+5. **React Dashboard** ([`dashboard/`](dashboard/))
 
-**Config Patcher Server** (`mcp-servers/config-patcher/`):
+   - Real-time WebSocket updates
+   - Container status, metrics, logs, and AI insights
+   - Beautiful UI with TailwindCSS
 
-- `update_env_vars` - Patch environment variables
+6. **MCP Servers** ([`mcp-servers/`](mcp-servers/))
+   - **Docker Control** ([`mcp-servers/docker-control/index.js`](mcp-servers/docker-control/index.js)): Container management
+   - **Config Patcher** ([`mcp-servers/config-patcher/index.js`](mcp-servers/config-patcher/index.js)): Environment variable updates
 
-Both servers are automatically started by the MCP Gateway container and use stdio transport for communication.
+---
 
-### React Dashboard
+## 🔧 Configuration Options
 
-**Features**:
+### Environment Variables
 
-- Real-time container status cards
-- Live metrics charts (CPU, memory, network)
-- Streaming log viewer with syntax highlighting
-- AI insights panel showing incidents and fixes
+Edit `.env` to customize behavior:
 
-**Development**:
+```env
+# AI Model Configuration
+CEREBRAS_MODEL=llama-4-scout-17b-16e-instruct
+LLAMA_MODEL=meta-llama/llama-4-scout
 
-```bash
-cd dashboard
-npm run dev    # Start dev server on port 5173
-npm run build  # Build for production
-npm run lint   # Run ESLint
+# Monitoring Settings
+LOG_LINES_PER_CHECK=20
+LOG_CHECK_INTERVAL=5
+API_PORT=8000
+
+# Safety Settings
+AUTO_HEAL_ENABLED=true
+MANUAL_APPROVAL_MODE=false
+
+# Dashboard
+VITE_WS_URL=ws://localhost:8000/ws
+VITE_API_URL=http://localhost:8000
+```
+
+### Docker Labels
+
+Add these labels to containers you want to monitor:
+
+```yaml
+labels:
+  - "sre-sentinel.monitor=true"
+  - "sre-sentinel.service=your-service-name"
 ```
 
 ---
 
-## Troubleshooting
+## 📊 Monitoring and Metrics
 
-### Docker containers won't start
+The system tracks:
 
-**Solution**:
+- **Container metrics**: CPU, memory, network usage
+- **Log patterns**: Error rates, crash signatures
+- **Incident lifecycle**: Detection → Analysis → Healing → Resolution
+- **AI performance**: Detection latency, analysis confidence
+
+### Accessing Metrics
+
+- **Dashboard**: Visual charts and real-time updates
+- **API endpoints**:
+  - `GET /containers` - Current container states
+  - `GET /incidents` - Incident history
+  - `WebSocket /ws` - Real-time event stream
+
+---
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+#### Docker containers won't start
 
 ```bash
 # Check Docker daemon
@@ -336,108 +324,51 @@ docker-compose down
 docker-compose up -d --build
 ```
 
-### SRE Sentinel can't detect containers
-
-**Check labels**:
+#### API key errors
 
 ```bash
-# Inspect container labels
-docker inspect demo-api | grep -A 5 Labels
+# Check .env file has keys without quotes
+cat .env
 
-# Should see:
-# "sre-sentinel.monitor": "true"
-# "sre-sentinel.service": "api"
+# Restart containers
+docker-compose restart sre-sentinel
+
+# Check logs
+docker-compose logs sre-sentinel
 ```
 
-### Dashboard not connecting
+#### Dashboard not connecting
 
-**Check WebSocket**:
+1. Check WebSocket connection in browser DevTools
+2. Verify `VITE_WS_URL` in dashboard `.env`
+3. Check if backend is running: `curl http://localhost:8000/health`
 
-1. Open browser DevTools → Network → WS
-2. Should see connection to `ws://localhost:8000/ws`
-3. Check dashboard `.env` for correct `VITE_WS_URL`
-
-**Verify backend**:
+#### MCP servers not responding
 
 ```bash
-curl http://localhost:8000/health
-```
+# Check MCP Gateway is running
+docker-compose ps mcp-gateway
 
-### Python import errors
-
-**Solution**:
-
-```bash
-# Ensure virtual environment is activated
-source venv/bin/activate
-
-# Reinstall dependencies
-cd src
-pip install -r requirements.txt
-```
-
-### MCP servers not responding
-
-**Check installation**:
-
-```bash
+# Check MCP server installation
 cd mcp-servers/docker-control
 npm list @modelcontextprotocol/sdk
-
-# Should show version 1.0.0 or higher
 ```
 
-### API keys not working
-
-**Verify keys**:
-
-1. Check `.env` file has keys without quotes
-2. Restart containers: `docker-compose restart sre-sentinel`
-3. Check logs: `docker-compose logs sre-sentinel`
-
-### MCP Gateway not found
-
-**Install Docker MCP plugin**:
+### Health Checks
 
 ```bash
-# Download from GitHub releases
-# https://github.com/docker/mcp-gateway/releases
+# Check all containers
+docker-compose ps
 
-# Copy to plugins directory
-cp docker-mcp ~/.docker/cli-plugins/
-chmod +x ~/.docker/cli-plugins/docker-mcp
+# Check individual services
+curl http://localhost:3001/health  # Demo API
+curl http://localhost:8000/health  # SRE Sentinel
+curl http://localhost:8811/health  # MCP Gateway
 ```
 
 ---
 
-## Startup Checklist
-
-- [ ] Docker Desktop is running
-- [ ] `.env` file exists with valid API keys
-- [ ] Python dependencies installed
-- [ ] MCP server dependencies installed
-- [ ] Dashboard dependencies installed
-- [ ] Docker containers running (`docker-compose up -d`)
-- [ ] All containers are healthy (`docker-compose ps`)
-- [ ] Dashboard running (`npm run dev` in dashboard)
-- [ ] Can access http://localhost:5173
-- [ ] Can access http://localhost:3001/health
-- [ ] Can access http://localhost:8000/health
-
----
-
-## Important URLs
-
-- **Dashboard**: http://localhost:5173
-- **Demo API**: http://localhost:3001
-- **SRE Sentinel API**: http://localhost:8000
-- **MCP Gateway**: http://localhost:8811
-- **WebSocket**: ws://localhost:8000/ws
-- **PostgreSQL**: localhost:5432
-
----
-
-## Maintenance Commands
+## 🔄 Maintenance Commands
 
 ### View Logs
 
@@ -448,7 +379,7 @@ docker-compose logs -f
 # Specific service
 docker-compose logs -f sre-sentinel
 
-# Dashboard dev server logs
+# Dashboard dev server
 cd dashboard && npm run dev
 ```
 
@@ -472,24 +403,90 @@ docker-compose up -d --build
 # Watch all containers
 watch docker-compose ps
 
-# Monitor resources
+# Monitor resource usage
 docker stats
 ```
 
 ---
 
-## Success Criteria
+## 🎯 Success Criteria
 
-System is working correctly when:
+Your SRE Sentinel is fully working when:
 
 - ✅ All 4 Docker containers running (MCP Gateway, API, Postgres, SRE Sentinel)
-- ✅ Dashboard loads and shows green status cards
-- ✅ Logs stream in real-time
+- ✅ Dashboard loads at http://localhost:5173 with green status cards
+- ✅ Logs stream in real-time in the dashboard
 - ✅ Metrics charts update every few seconds
-- ✅ Breaking a service triggers auto-healing
-- ✅ AI insights appear in the dashboard
-- ✅ Services recover automatically
+- ✅ Breaking a service triggers auto-healing within 30 seconds
+- ✅ AI insights appear in the dashboard with explanations
+- ✅ Services recover automatically without manual intervention
 
 ---
 
-**Happy Monitoring! 🛡️**
+## 🎬 Demo Script
+
+For presentations or demos, use this script:
+
+```bash
+# 1. Start everything
+./scripts/setup.sh
+docker-compose up -d
+cd dashboard && npm run dev
+
+# 2. Show working system
+# Open http://localhost:5173
+# Show green status cards, live logs, metrics
+
+# 3. Break something
+./scripts/break-service.sh
+# Choose option 1 (kill postgres)
+
+# 4. Watch auto-healing
+# Explain: Detection → Analysis → Healing → Resolution
+
+# 5. Show results
+# Container status returns to green
+# AI insights show what happened
+```
+
+---
+
+## 📚 Next Steps
+
+Once your system is running:
+
+1. **Add your own containers** to monitor with the `sre-sentinel.monitor=true` label
+2. **Customize AI prompts** in [`src/cerebras_client.py`](src/cerebras_client.py) and [`src/llama_analyzer.py`](src/llama_analyzer.py)
+3. **Extend MCP servers** in [`mcp-servers/`](mcp-servers/) for custom actions
+4. **Configure alerts** by integrating with your notification system
+
+---
+
+## 📋 Startup Checklist
+
+- [ ] Docker Desktop is running
+- [ ] `.env` file exists with valid API keys
+- [ ] Python dependencies installed
+- [ ] MCP server dependencies installed
+- [ ] Dashboard dependencies installed
+- [ ] Docker containers running (`docker-compose up -d`)
+- [ ] All containers are healthy (`docker-compose ps`)
+- [ ] Dashboard running (`npm run dev` in dashboard)
+- [ ] Can access http://localhost:5173
+- [ ] Can access http://localhost:3001/health
+- [ ] Can access http://localhost:8000/health
+
+---
+
+## 🔗 Important URLs
+
+- **Dashboard**: http://localhost:5173
+- **Demo API**: http://localhost:3001
+- **SRE Sentinel API**: http://localhost:8000
+- **MCP Gateway**: http://localhost:8811
+- **WebSocket**: ws://localhost:8000/ws
+- **PostgreSQL**: localhost:5432
+
+---
+
+**🛡️ Happy monitoring! Your infrastructure is now self-healing with AI!**
