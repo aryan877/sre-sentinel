@@ -1,283 +1,98 @@
-# 🚀 SRE Sentinel - Complete Setup & Run Guide
+# SRE Sentinel Setup Guide
 
-## 🎯 System Overview
+This guide will help you set up and configure SRE Sentinel for monitoring and self-healing your containerized applications.
 
-SRE Sentinel is an AI-powered DevOps copilot that autonomously monitors, diagnoses, and heals infrastructure issues:
+## Prerequisites
 
-- **Detects** anomalies in real-time using Cerebras AI (ultra-fast inference - 2,600 tokens/sec)
-- **Diagnoses** root causes using Llama 4 Scout (10M token context for holistic analysis)
-- **Heals** issues automatically via Docker MCP Gateway (secure orchestration)
-- **Displays** everything in a real-time React dashboard
+- Docker and Docker Compose (latest versions)
+- Python 3.9+
+- Node.js 16+ (for MCP servers)
+- Redis 6+ (for event bus)
+- API keys for Cerebras and Llama AI services
 
-## 📋 Prerequisites
-
-### Required Software
-
-- **Docker Desktop** (running and accessible)
-- **Python 3.11+**
-- **Node.js 18+**
-- **Git**
-
-### Required API Keys
-
-1. **Cerebras API Key** (free tier available)
-   - Get from: https://cloud.cerebras.ai
-   - Used for ultra-fast anomaly detection (<1 second)
-2. **Llama API Key** (choose one):
-   - **OpenRouter** (recommended): https://openrouter.ai
-   - **Groq**: https://groq.com
-   - Used for deep root cause analysis (3-5 seconds)
-
----
-
-## 🚀 Quick Start (15 minutes)
-
-### Step 1: Clone and Setup
+## 1. Clone the Repository
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/your-org/sre-sentinel.git
 cd sre-sentinel
-
-# Run the automated setup script
-./scripts/setup.sh
 ```
 
-The setup script will:
+## 2. Configure Environment Variables
 
-- ✅ Check all prerequisites
-- ✅ Install Python dependencies
-- ✅ Install Node.js dependencies for dashboard and MCP servers
-- ✅ Build Docker containers
-- ✅ Create `.env` file from template
-
-### Step 2: Configure API Keys
-
-Edit the `.env` file and add your API keys:
-
-```env
-# Cerebras API Configuration
-CEREBRAS_API_KEY=your_cerebras_key_here
-CEREBRAS_MODEL=llama-4-scout-17b-16e-instruct
-
-# Llama 4 Scout Configuration (via OpenRouter)
-LLAMA_API_KEY=your_openrouter_key_here
-LLAMA_API_BASE=https://openrouter.ai/api/v1
-LLAMA_MODEL=meta-llama/llama-4-scout
-
-# Or use Groq instead
-# LLAMA_API_KEY=your_groq_key_here
-# LLAMA_API_BASE=https://api.groq.com/openai/v1
-# LLAMA_MODEL=llama-3.1-70b-versatile
-
-# Other settings (defaults are fine)
-API_PORT=8000
-AUTO_HEAL_ENABLED=true
-```
-
-### Step 3: Start the System
+Copy the example environment file and configure it with your settings:
 
 ```bash
-# Start all Docker containers (includes MCP Gateway)
+cp .env-example .env
+```
+
+Edit `.env` with the following variables:
+
+```bash
+# AI Service API Keys
+CEREBRAS_API_KEY=your_cerebras_api_key_here
+LLAMA_API_KEY=your_llama_api_key_here
+LLAMA_API_BASE=https://openrouter.ai/api/v1  # Optional, uses OpenRouter by default
+
+# System Configuration
+MCP_GATEWAY_URL=http://mcp-gateway:8811  # URL of the MCP Gateway
+API_PORT=8000  # Port for the API server
+API_HOST=0.0.0.0  # Host for the API server
+AUTO_HEAL_ENABLED=true  # Enable/disable automatic healing
+
+# Redis Configuration
+REDIS_HOST=redis  # Redis server host
+REDIS_PORT=6379  # Redis server port
+REDIS_PASSWORD=  # Redis password (if required)
+REDIS_DB=0  # Redis database number
+
+# Log Analysis Configuration
+LOG_LINES_PER_CHECK=20  # Number of log lines to analyze at once
+LOG_CHECK_INTERVAL=5.0  # Interval between log checks (seconds)
+```
+
+## 3. Start the System
+
+Use Docker Compose to start all components:
+
+```bash
 docker-compose up -d
-
-# Start the dashboard (in a new terminal)
-cd dashboard
-npm run dev
 ```
 
-### Step 4: Verify Everything is Working
+This will start:
 
-Open these URLs to verify components:
+- Demo API service (Node.js)
+- PostgreSQL database
+- Redis for event bus
+- MCP Gateway with Docker control tools
+- SRE Sentinel monitoring agent
 
-- **Dashboard**: http://localhost:5173
-- **Demo API**: http://localhost:3001/health
-- **SRE Sentinel API**: http://localhost:8000/health
-- **MCP Gateway**: http://localhost:8811
+## 4. Verify the Setup
 
-You should see:
-
-- ✅ Green container status cards in dashboard
-- ✅ Real-time metrics charts
-- ✅ Live log streaming
-- ✅ All health checks passing
-
----
-
-## 🧪 Testing the System
-
-### Automated Testing (Recommended)
-
-Run the built-in test script:
+### Check Container Status
 
 ```bash
-./scripts/break-service.sh
+docker-compose ps
 ```
 
-Choose a failure scenario:
+All containers should be in a "running" state.
 
-1. **Kill Postgres** - Simulates database crash
-2. **Memory leak** - Triggers OOM crash
-3. **Remove env var** - Creates configuration error
-4. **Max out CPU** - Causes performance issues
+### Check the Dashboard
 
-### What to Expect
+Open http://localhost:8000 in your browser to access the monitoring dashboard.
 
-Within 30 seconds, you'll see:
-
-1. **Detection** (Cerebras - <1 second)
-
-   ```
-   ⚡ Anomaly detected in 0.8 seconds
-   Service: postgres-db
-   Confidence: 94%
-   ```
-
-2. **Diagnosis** (Llama 4 - 3-5 seconds)
-
-   ```
-   🧠 Analyzing 50,000 log lines...
-   Root Cause: Postgres crashed due to OOM
-   ```
-
-3. **Healing** (MCP Gateway - 10-15 seconds)
-
-   ```
-   🔧 Restarting container...
-   ✓ System recovered in 12 seconds
-   ```
-
-4. **Dashboard Updates**
-   - Status changes: 🟢 → 🔴 → 🟡 → 🟢
-   - AI insights panel shows explanation
-   - Timeline of actions taken
-
-### Manual Testing
-
-#### Test 1: Kill a Container
+### Check MCP Gateway Health
 
 ```bash
-# Kill postgres container
-docker kill demo-postgres
-
-# Watch SRE Sentinel detect and fix:
-# 1. Detects connection errors in API logs
-# 2. Analyzes the issue
-# 3. Restarts postgres container
+curl http://localhost:8811/health
 ```
 
-#### Test 2: Memory Leak
+You should see a healthy response from the MCP Gateway.
 
-```bash
-# Trigger memory leak in demo API
-for i in {1..10}; do curl -s http://localhost:3001/leak; done
+## 5. Configure Monitoring
 
-# Watch container crash and auto-heal
-docker stats demo-api
-```
+### Add Monitoring Labels to Containers
 
-#### Test 3: Database Connection Issues
-
-```bash
-# Stop postgres
-docker stop demo-postgres
-
-# Try database endpoint
-curl http://localhost:3001/db-check
-
-# Watch SRE Sentinel restore service
-```
-
----
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Docker        │    │   SRE Sentinel   │    │   Dashboard     │
-│   Containers    │───▶│   Core Engine    │───▶│   (React)       │
-│                 │    │                  │    │                 │
-│ • demo-api      │    │ • Anomaly Detect │    │ • Real-time UI  │
-│ • demo-postgres │    │ • Root Cause     │    │ • Metrics       │
-│ • mcp-gateway   │    │ • Auto-heal      │    │ • Logs          │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │   AI Services    │
-                       │                  │
-                       │ • Cerebras       │
-                       │ • Llama 4 Scout  │
-                       └──────────────────┘
-```
-
-### Key Components
-
-1. **Python Monitoring Server** ([`src/monitor.py`](src/monitor.py))
-
-   - Monitors Docker containers with `sre-sentinel.monitor=true` label
-   - Streams logs and collects metrics (CPU, memory, network)
-   - Detects anomalies and triggers healing
-   - Broadcasts events via WebSocket
-
-2. **Cerebras Client** ([`src/cerebras_client.py`](src/cerebras_client.py))
-
-   - Ultra-fast anomaly detection (2,600 tokens/sec)
-   - Analyzes 100K log lines in <1 second
-   - Returns structured anomaly results with confidence scores
-
-3. **Llama Analyzer** ([`src/llama_analyzer.py`](src/llama_analyzer.py))
-
-   - Deep root cause analysis with 10M token context
-   - Analyzes entire system state (logs + configs + code)
-   - Generates actionable fix suggestions
-
-4. **MCP Orchestrator** ([`src/mcp_orchestrator.py`](src/mcp_orchestrator.py))
-
-   - Secure execution of fixes via Docker MCP Gateway
-   - Isolates and monitors all AI actions
-   - Supports container restarts, config updates, resource scaling
-
-5. **React Dashboard** ([`dashboard/`](dashboard/))
-
-   - Real-time WebSocket updates
-   - Container status, metrics, logs, and AI insights
-   - Beautiful UI with TailwindCSS
-
-6. **MCP Servers** ([`mcp-servers/`](mcp-servers/))
-   - **Docker Control** ([`mcp-servers/docker-control/index.js`](mcp-servers/docker-control/index.js)): Container management
-   - **Config Patcher** ([`mcp-servers/config-patcher/index.js`](mcp-servers/config-patcher/index.js)): Environment variable updates
-
----
-
-## 🔧 Configuration Options
-
-### Environment Variables
-
-Edit `.env` to customize behavior:
-
-```env
-# AI Model Configuration
-CEREBRAS_MODEL=llama-4-scout-17b-16e-instruct
-LLAMA_MODEL=meta-llama/llama-4-scout
-
-# Monitoring Settings
-LOG_LINES_PER_CHECK=20
-LOG_CHECK_INTERVAL=5
-API_PORT=8000
-
-# Safety Settings
-AUTO_HEAL_ENABLED=true
-MANUAL_APPROVAL_MODE=false
-
-# Dashboard
-VITE_WS_URL=ws://localhost:8000/ws
-VITE_API_URL=http://localhost:8000
-```
-
-### Docker Labels
-
-Add these labels to containers you want to monitor:
+Add these labels to containers you want to monitor in your `docker-compose.yml`:
 
 ```yaml
 labels:
@@ -285,208 +100,223 @@ labels:
   - "sre-sentinel.service=your-service-name"
 ```
 
----
+### Example Configuration
 
-## 📊 Monitoring and Metrics
+```yaml
+version: "3.8"
+services:
+  your-service:
+    image: your-image
+    labels:
+      - "sre-sentinel.monitor=true"
+      - "sre-sentinel.service=your-service"
+    # Your other configuration...
+```
 
-The system tracks:
+## 6. Test the System
 
-- **Container metrics**: CPU, memory, network usage
-- **Log patterns**: Error rates, crash signatures
-- **Incident lifecycle**: Detection → Analysis → Healing → Resolution
-- **AI performance**: Detection latency, analysis confidence
+### Trigger a Test Incident
 
-### Accessing Metrics
+Use the provided script to simulate a service failure:
 
-- **Dashboard**: Visual charts and real-time updates
-- **API endpoints**:
-  - `GET /containers` - Current container states
-  - `GET /incidents` - Incident history
-  - `WebSocket /ws` - Real-time event stream
+```bash
+./scripts/break-service.sh
+```
 
----
+This will:
 
-## 🚨 Troubleshooting
+- Stop the demo API service
+- Trigger anomaly detection
+- Create an incident
+- Execute automated fixes
+- Restore service health
+
+### Verify Incident Handling
+
+1. Check the dashboard for the incident
+2. Review the AI analysis and recommended fixes
+3. Verify that the service was automatically restored
+
+## 7. MCP Configuration
+
+### Understanding MCP Servers
+
+SRE Sentinel uses two MCP servers for container management:
+
+1. **Docker Control Server** (`mcp-servers/docker-control/`)
+
+   - Provides tools for container management
+   - Handles restarts, health checks, resource updates, and log retrieval
+
+2. **Config Patcher Server** (`mcp-servers/config-patcher/`)
+   - Provides tools for configuration updates
+   - Handles environment variable updates
+
+### Adding Custom MCP Servers
+
+1. Create a new MCP server in `mcp-servers/your-server/`
+2. Implement your tools following the MCP specification
+3. Update `mcp-servers/catalog.json` with server information:
+
+```json
+{
+  "name": "your-server",
+  "description": "Description of your server",
+  "category": "infrastructure",
+  "command": "node",
+  "args": ["./your-server/index.js"],
+  "tools": ["your_tool_name"],
+  "metadata": {
+    "owner": "Your Organization",
+    "version": "1.0.0",
+    "security_level": "high"
+  }
+}
+```
+
+4. Update the MCP Gateway configuration in `docker-compose.yml` to include your server:
+
+```yaml
+mcp-gateway:
+  # ... other configuration
+  command: [
+      "--transport=streaming",
+      "--port=8811",
+      "--servers=docker-control,config-patcher,your-server",
+      # ... other options
+    ]
+```
+
+5. Restart the MCP Gateway:
+
+```bash
+docker-compose restart mcp-gateway
+```
+
+## 8. Customization
+
+### Custom AI Analysis
+
+Modify the AI analysis in:
+
+- `src/cerebras_client.py`: Anomaly detection logic
+- `src/llama_analyzer.py`: Root cause analysis logic
+
+### Custom Monitoring
+
+Extend monitoring in `src/monitor.py`:
+
+- Add new metrics collection
+- Implement custom anomaly detection
+- Add specialized fix actions
+
+### Custom Dashboard
+
+Modify the dashboard in `dashboard/`:
+
+- Update the UI components
+- Add new visualizations
+- Customize the event handling
+
+## 9. Troubleshooting
 
 ### Common Issues
 
-#### Docker containers won't start
+1. **MCP Gateway Connection Issues**
+
+   - Check if the MCP Gateway is running: `docker-compose ps mcp-gateway`
+   - Check MCP Gateway logs: `docker-compose logs mcp-gateway`
+   - Verify the MCP Gateway URL in your environment variables
+
+2. **AI Service Connection Issues**
+
+   - Verify your API keys are correct
+   - Check if the AI services are accessible from your network
+   - Review the AI service logs for error messages
+
+3. **Redis Connection Issues**
+
+   - Check if Redis is running: `docker-compose ps redis`
+   - Verify Redis connection parameters in your environment variables
+   - Check Redis logs: `docker-compose logs redis`
+
+4. **Container Monitoring Issues**
+   - Verify containers have the correct labels
+   - Check if the SRE Sentinel can access Docker socket
+   - Review the SRE Sentinel logs: `docker-compose logs sre-sentinel`
+
+### Debug Mode
+
+Enable debug mode for more detailed logging:
 
 ```bash
-# Check Docker daemon
-docker info
-
-# View logs
-docker-compose logs
-
-# Rebuild containers
-docker-compose down
-docker-compose up -d --build
+# Set log level to debug
+LOG_LEVEL=debug docker-compose up
 ```
 
-#### API key errors
+### Manual MCP Testing
+
+Test MCP tools directly:
 
 ```bash
-# Check .env file has keys without quotes
-cat .env
+# List available tools
+curl -X POST http://localhost:8811/mcp/list_tools
 
-# Restart containers
-docker-compose restart sre-sentinel
+# Test container restart
+curl -X POST http://localhost:8811/mcp/call \
+  -H "Content-Type: application/json" \
+  -d '{"name": "restart_container", "arguments": {"container_name": "demo-api", "reason": "Manual test"}}'
 
-# Check logs
-docker-compose logs sre-sentinel
+# Test health check
+curl -X POST http://localhost:8811/mcp/call \
+  -H "Content-Type: application/json" \
+  -d '{"name": "health_check", "arguments": {"container_name": "demo-api"}}'
 ```
 
-#### Dashboard not connecting
+## 10. Production Deployment
 
-1. Check WebSocket connection in browser DevTools
-2. Verify `VITE_WS_URL` in dashboard `.env`
-3. Check if backend is running: `curl http://localhost:8000/health`
+### Security Considerations
 
-#### MCP servers not responding
+1. **API Keys**: Store API keys securely using a secrets management system
+2. **Network Security**: Configure firewall rules to restrict access
+3. **Container Security**: Run containers with non-root users
+4. **Resource Limits**: Set appropriate resource limits for containers
 
-```bash
-# Check MCP Gateway is running
-docker-compose ps mcp-gateway
+### Scaling Considerations
 
-# Check MCP server installation
-cd mcp-servers/docker-control
-npm list @modelcontextprotocol/sdk
-```
+1. **Redis**: Use a managed Redis service for production
+2. **Monitoring**: Set up external monitoring for the SRE Sentinel itself
+3. **Logging**: Configure centralized logging for all components
+4. **Backup**: Regularly back up configuration and data
 
-### Health Checks
+### High Availability
 
-```bash
-# Check all containers
-docker-compose ps
+1. **Redundancy**: Deploy multiple instances of critical components
+2. **Load Balancing**: Use a load balancer for the API server
+3. **Failover**: Configure automatic failover for critical services
+4. **Health Checks**: Set up comprehensive health checks
 
-# Check individual services
-curl http://localhost:3001/health  # Demo API
-curl http://localhost:8000/health  # SRE Sentinel
-curl http://localhost:8811/health  # MCP Gateway
-```
+## 11. Maintenance
 
----
+### Regular Tasks
 
-## 🔄 Maintenance Commands
+1. **Update Dependencies**: Regularly update Docker images and dependencies
+2. **Review Logs**: Periodically review logs for issues or optimizations
+3. **Monitor Performance**: Track system performance and resource usage
+4. **Backup Configuration**: Regularly back up configuration files
 
-### View Logs
+### Upgrading SRE Sentinel
 
-```bash
-# All services
-docker-compose logs -f
+1. **Backup**: Back up your configuration and data
+2. **Update**: Pull the latest version of SRE Sentinel
+3. **Migrate**: Follow any migration instructions for the new version
+4. **Test**: Thoroughly test the new version before deploying to production
 
-# Specific service
-docker-compose logs -f sre-sentinel
+## 12. Support
 
-# Dashboard dev server
-cd dashboard && npm run dev
-```
+For support and questions:
 
-### Restart Services
-
-```bash
-# Restart all
-docker-compose restart
-
-# Restart specific service
-docker-compose restart sre-sentinel
-
-# Clean restart
-docker-compose down
-docker-compose up -d --build
-```
-
-### Monitor Resources
-
-```bash
-# Watch all containers
-watch docker-compose ps
-
-# Monitor resource usage
-docker stats
-```
-
----
-
-## 🎯 Success Criteria
-
-Your SRE Sentinel is fully working when:
-
-- ✅ All 4 Docker containers running (MCP Gateway, API, Postgres, SRE Sentinel)
-- ✅ Dashboard loads at http://localhost:5173 with green status cards
-- ✅ Logs stream in real-time in the dashboard
-- ✅ Metrics charts update every few seconds
-- ✅ Breaking a service triggers auto-healing within 30 seconds
-- ✅ AI insights appear in the dashboard with explanations
-- ✅ Services recover automatically without manual intervention
-
----
-
-## 🎬 Demo Script
-
-For presentations or demos, use this script:
-
-```bash
-# 1. Start everything
-./scripts/setup.sh
-docker-compose up -d
-cd dashboard && npm run dev
-
-# 2. Show working system
-# Open http://localhost:5173
-# Show green status cards, live logs, metrics
-
-# 3. Break something
-./scripts/break-service.sh
-# Choose option 1 (kill postgres)
-
-# 4. Watch auto-healing
-# Explain: Detection → Analysis → Healing → Resolution
-
-# 5. Show results
-# Container status returns to green
-# AI insights show what happened
-```
-
----
-
-## 📚 Next Steps
-
-Once your system is running:
-
-1. **Add your own containers** to monitor with the `sre-sentinel.monitor=true` label
-2. **Customize AI prompts** in [`src/cerebras_client.py`](src/cerebras_client.py) and [`src/llama_analyzer.py`](src/llama_analyzer.py)
-3. **Extend MCP servers** in [`mcp-servers/`](mcp-servers/) for custom actions
-4. **Configure alerts** by integrating with your notification system
-
----
-
-## 📋 Startup Checklist
-
-- [ ] Docker Desktop is running
-- [ ] `.env` file exists with valid API keys
-- [ ] Python dependencies installed
-- [ ] MCP server dependencies installed
-- [ ] Dashboard dependencies installed
-- [ ] Docker containers running (`docker-compose up -d`)
-- [ ] All containers are healthy (`docker-compose ps`)
-- [ ] Dashboard running (`npm run dev` in dashboard)
-- [ ] Can access http://localhost:5173
-- [ ] Can access http://localhost:3001/health
-- [ ] Can access http://localhost:8000/health
-
----
-
-## 🔗 Important URLs
-
-- **Dashboard**: http://localhost:5173
-- **Demo API**: http://localhost:3001
-- **SRE Sentinel API**: http://localhost:8000
-- **MCP Gateway**: http://localhost:8811
-- **WebSocket**: ws://localhost:8000/ws
-- **PostgreSQL**: localhost:5432
-
----
-
-**🛡️ Happy monitoring! Your infrastructure is now self-healing with AI!**
+1. **Documentation**: Check the [README.md](README.md) for detailed information
+2. **Issues**: Report issues on the GitHub repository
+3. **Community**: Join our community forum for discussions
+4. **Support**: Contact our support team for enterprise support

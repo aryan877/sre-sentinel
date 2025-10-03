@@ -40,7 +40,7 @@ console = Console()
 class LlamaAnalyzerError(RuntimeError):
     """
     Custom exception for Llama analyzer errors.
-    
+
     Raised when the Llama API returns unusable data or when
     communication with the API fails.
     """
@@ -49,19 +49,24 @@ class LlamaAnalyzerError(RuntimeError):
 class LlamaSettings(BaseModel):
     """
     Configuration settings for Llama API access.
-    
+
     This model encapsulates all the settings needed to connect
     to the Llama API, including authentication and model selection.
     """
+
     api_key: str = Field(description="API key for Llama authentication")
-    base_url: str = Field(default="https://openrouter.ai/api/v1", description="Base URL for the API")
-    model: str = Field(default="meta-llama/llama-4-scout", description="Model name to use for analysis")
+    base_url: str = Field(
+        default="https://openrouter.ai/api/v1", description="Base URL for the API"
+    )
+    model: str = Field(
+        default="meta-llama/llama-4-scout", description="Model name to use for analysis"
+    )
 
     @classmethod
     def from_env(cls) -> "LlamaSettings":
         """
         Create settings from environment variables.
-        
+
         Loads configuration from environment variables with sensible defaults.
         Raises ValueError if required settings are missing.
         """
@@ -78,28 +83,36 @@ class LlamaSettings(BaseModel):
 class AnalysisMessage(BaseModel):
     """
     Chat message structure for Llama API.
-    
+
     Represents a single message in the conversation with the AI model,
     including the role (system, user, assistant) and content.
     """
-    role: str = Field(pattern="^(system|user|assistant)$", description="Message role in the conversation")
+
+    role: str = Field(
+        pattern="^(system|user|assistant)$",
+        description="Message role in the conversation",
+    )
     content: str = Field(description="Message content")
 
 
 class FixActionPayload(BaseModel):
     """
     Expected fix action structure from Llama response.
-    
+
     This model defines the structure of fix actions recommended by
     the AI model in its analysis response.
     """
-    action: str = Field(pattern="^(restart_container|update_config|patch_code|scale_resources)$", 
-                       description="Type of fix action to perform")
-    target: str = Field(description="Container name or other target for the fix")
-    details: str = Field(description="Specific details about how to apply the fix")
-    priority: int = Field(ge=1, le=5, description="Priority from 1 (lowest) to 5 (highest)")
 
-    @field_validator('action')
+    action: str = Field(
+        description="Type of fix action to perform (must match available tool name)"
+    )
+    target: str = Field(description="Container name or other target for the fix")
+    parameters: dict = Field(description="JSON parameters for the tool execution")
+    priority: int = Field(
+        ge=1, le=5, description="Priority from 1 (lowest) to 5 (highest)"
+    )
+
+    @field_validator("action")
     @classmethod
     def validate_action(cls, v: str) -> str:
         """Normalize action to lowercase."""
@@ -109,17 +122,28 @@ class FixActionPayload(BaseModel):
 class RootCausePayload(BaseModel):
     """
     Expected root cause analysis structure from Llama response.
-    
+
     This model defines the structure of the complete analysis response
     from the AI model, including root cause, affected components,
     and recommended fixes.
     """
+
     root_cause: str = Field(description="Primary cause of the incident")
-    explanation: str = Field(description="Detailed explanation of the root cause analysis")
-    affected_components: list[str] = Field(description="List of components affected by the incident")
-    suggested_fixes: list[FixActionPayload] = Field(description="Recommended fixes to resolve the incident")
-    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0")
-    prevention: str = Field(description="Recommendations for preventing similar incidents")
+    explanation: str = Field(
+        description="Detailed explanation of the root cause analysis"
+    )
+    affected_components: list[str] = Field(
+        description="List of components affected by the incident"
+    )
+    suggested_fixes: list[FixActionPayload] = Field(
+        description="Recommended fixes to resolve the incident"
+    )
+    confidence: float = Field(
+        ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0"
+    )
+    prevention: str = Field(
+        description="Recommendations for preventing similar incidents"
+    )
 
 
 # System prompt for the AI model
@@ -132,6 +156,14 @@ _ANALYSIS_SYSTEM_PROMPT: str = """You are a world-class Site Reliability Enginee
 
 Given comprehensive system context, perform root cause analysis and provide actionable fixes.
 
+Available MCP Gateway tools will be provided in the user message. Use only the tools listed there.
+
+For each fix, provide structured JSON parameters that match the tool's input schema. 
+For example:
+- For restart_container: {"container_name": "service-name", "reason": "description"}
+- For update_env_vars: {"container_name": "service-name", "env_updates": {"KEY": "value"}}
+- For update_resources: {"container_name": "service-name", "resources": {"memory": "512m", "cpu": "0.5"}}
+
 Respond ONLY with a JSON object in this format:
 {
     "root_cause": "detailed explanation of the underlying issue",
@@ -139,9 +171,9 @@ Respond ONLY with a JSON object in this format:
     "affected_components": ["component1", "component2"],
     "suggested_fixes": [
         {
-            "action": "restart_container|update_config|patch_code|scale_resources",
+            "action": "tool_name_from_available_tools",
             "target": "service_name or file_path",
-            "details": "specific change to make",
+            "parameters": {"structured": "json_parameters"},
             "priority": 1-5
         }
     ],
@@ -174,14 +206,14 @@ Write two short paragraphs that cover:
 class LlamaRootCauseAnalyzer:
     """
     Deep root cause analysis using Llama 4 Scout's long context with Pydantic models.
-    
+
     This class handles the complete root cause analysis workflow:
     1. Collects comprehensive system context
     2. Formats data for AI analysis
     3. Communicates with the Llama API
     4. Parses and validates responses
     5. Returns structured analysis results
-    
+
     The analyzer is designed to provide detailed insights into
     why incidents occurred and how to resolve them.
     """
@@ -189,12 +221,14 @@ class LlamaRootCauseAnalyzer:
     def __init__(self, settings: LlamaSettings | None = None) -> None:
         """
         Initialize the root cause analyzer with API settings.
-        
+
         Args:
             settings: API configuration settings. If None, loads from environment.
         """
         self.settings = settings or LlamaSettings.from_env()
-        self.client = OpenAI(api_key=self.settings.api_key, base_url=self.settings.base_url)
+        self.client = OpenAI(
+            api_key=self.settings.api_key, base_url=self.settings.base_url
+        )
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10)
@@ -207,14 +241,15 @@ class LlamaRootCauseAnalyzer:
         environment_vars: Mapping[str, str] | None = None,
         service_code: str | None = None,
         container_stats: Mapping[str, object] | None = None,
+        available_tools: str | None = None,
     ) -> RootCauseAnalysis:
         """
         Perform deep root cause analysis with full system context.
-        
+
         This is the main method for root cause analysis. It collects all available
         context about the incident, sends it to the AI model, and returns a
         structured analysis with recommended fixes.
-        
+
         Args:
             anomaly_summary: Summary of the detected anomaly
             full_logs: Complete log history for analysis
@@ -222,7 +257,8 @@ class LlamaRootCauseAnalyzer:
             environment_vars: Environment variables from the container
             service_code: Source code of the service (if available)
             container_stats: Container statistics and state information
-            
+            available_tools: Description of available MCP tools
+
         Returns:
             RootCauseAnalysis with detailed analysis and recommended fixes
         """
@@ -234,6 +270,7 @@ class LlamaRootCauseAnalyzer:
             environment_vars=environment_vars,
             service_code=service_code,
             container_stats=container_stats,
+            available_tools=available_tools,
         )
 
         console.print(
@@ -256,14 +293,14 @@ class LlamaRootCauseAnalyzer:
             )
         except Exception as exc:
             console.print(f"[red]Error contacting Llama API: {exc}[/red]")
-            return _fallback_analysis(str(exc))
+            raise LlamaAnalyzerError(f"Failed to contact Llama API: {exc}")
 
         try:
             # Parse and validate the AI response
             analysis = self._parse_completion(completion)
         except Exception as exc:
             console.print(f"[red]Unable to parse Llama response: {exc}[/red]")
-            return _fallback_analysis(str(exc))
+            raise LlamaAnalyzerError(f"Failed to parse Llama response: {exc}")
 
         # Display results to the console
         console.print("\n[bold green]✓ Root Cause Analysis Complete[/bold green]")
@@ -278,14 +315,14 @@ class LlamaRootCauseAnalyzer:
     def explain_for_humans(self, analysis: RootCauseAnalysis) -> str:
         """
         Translate technical analysis into a stakeholder-friendly narrative.
-        
+
         This method takes the technical analysis from the AI model and
         generates a simple, natural language explanation that non-technical
         stakeholders can understand.
-        
+
         Args:
             analysis: Root cause analysis results from the AI model
-            
+
         Returns:
             Human-friendly explanation of the incident
         """
@@ -313,13 +350,13 @@ class LlamaRootCauseAnalyzer:
     def _build_analysis_messages(self, context: str) -> list[AnalysisMessage]:
         """
         Build validated messages for root cause analysis.
-        
+
         Formats the system context into a structured conversation
         that the AI model can understand and analyze.
-        
+
         Args:
             context: Formatted system context for analysis
-            
+
         Returns:
             List of formatted messages for the AI model
         """
@@ -333,16 +370,18 @@ class LlamaRootCauseAnalyzer:
         ]
         return messages
 
-    def _build_explanation_messages(self, analysis: RootCauseAnalysis) -> list[AnalysisMessage]:
+    def _build_explanation_messages(
+        self, analysis: RootCauseAnalysis
+    ) -> list[AnalysisMessage]:
         """
         Build validated messages for human-friendly explanation.
-        
+
         Formats the technical analysis for the explanation prompt
         to generate a stakeholder-friendly narrative.
-        
+
         Args:
             analysis: Root cause analysis results from the AI model
-            
+
         Returns:
             List of formatted messages for the AI model
         """
@@ -360,16 +399,16 @@ class LlamaRootCauseAnalyzer:
     def _parse_completion(self, completion: ChatCompletion) -> RootCauseAnalysis:
         """
         Parse AI model output into a validated domain object.
-        
+
         Takes the raw response from the AI model, validates it against
         our expected schema, and converts it to our domain model.
-        
+
         Args:
             completion: Raw completion response from the AI model
-            
+
         Returns:
             Validated RootCauseAnalysis
-            
+
         Raises:
             LlamaAnalyzerError: If the response is invalid or missing
         """
@@ -399,7 +438,7 @@ class LlamaRootCauseAnalyzer:
             FixAction(
                 action=fix.action,
                 target=fix.target,
-                details=fix.details,
+                details=json.dumps(fix.parameters),  # Convert parameters to JSON string
                 priority=fix.priority,
             )
             for fix in payload.suggested_fixes
@@ -424,13 +463,14 @@ class LlamaRootCauseAnalyzer:
         environment_vars: Mapping[str, str] | None,
         service_code: str | None,
         container_stats: Mapping[str, object] | None,
+        available_tools: str | None,
     ) -> str:
         """
         Build comprehensive context for the AI model.
-        
+
         Combines all available information about the incident into a
         structured format that the AI model can analyze effectively.
-        
+
         Args:
             anomaly_summary: Summary of the detected anomaly
             full_logs: Complete log history for analysis
@@ -438,11 +478,16 @@ class LlamaRootCauseAnalyzer:
             environment_vars: Environment variables from the container
             service_code: Source code of the service (if available)
             container_stats: Container statistics and state information
-            
+            available_tools: Description of available MCP tools
+
         Returns:
             Formatted context string for the AI model
         """
         sections: list[str] = [f"# Anomaly Detected\n{anomaly_summary}\n"]
+
+        # Add available tools if provided
+        if available_tools:
+            sections.append(f"\n# Available MCP Gateway Tools\n{available_tools}")
 
         # Add container statistics if available
         if container_stats:
@@ -459,7 +504,9 @@ class LlamaRootCauseAnalyzer:
 
         # Add Docker compose configuration if available
         if docker_compose:
-            sections.append(f"\n# Docker Compose Configuration\n```yaml\n{docker_compose}\n```")
+            sections.append(
+                f"\n# Docker Compose Configuration\n```yaml\n{docker_compose}\n```"
+            )
 
         # Add service code if available
         if service_code:
@@ -479,14 +526,14 @@ class LlamaRootCauseAnalyzer:
 def _redact_sensitive(env_vars: Mapping[str, str]) -> Mapping[str, str]:
     """
     Redact sensitive information from environment variables.
-    
+
     Replaces values of sensitive environment variables (keys, secrets,
     passwords, tokens) with placeholder text to prevent exposing
     sensitive information in logs or AI prompts.
-    
+
     Args:
         env_vars: Dictionary of environment variables
-        
+
     Returns:
         Dictionary with sensitive values redacted
     """
@@ -500,33 +547,10 @@ def _redact_sensitive(env_vars: Mapping[str, str]) -> Mapping[str, str]:
     return redacted
 
 
-def _fallback_analysis(error: str) -> RootCauseAnalysis:
-    """
-    Create a fallback analysis when the AI service fails.
-    
-    Returns a minimal analysis indicating that the AI service
-    failed, allowing the incident handling流程 to continue.
-    
-    Args:
-        error: Error message from the AI service
-        
-    Returns:
-        Minimal RootCauseAnalysis with error information
-    """
-    return RootCauseAnalysis(
-        root_cause=f"Error analyzing: {error}",
-        explanation="Unable to complete analysis",
-        affected_components=(),
-        suggested_fixes=(),
-        confidence=0.0,
-        prevention="",
-    )
-
-
 if __name__ == "__main__":
     """
     Example usage of the Llama root cause analyzer.
-    
+
     This block demonstrates how to use the analyzer with sample incident data.
     It's primarily for testing and demonstration purposes.
     """
@@ -535,7 +559,8 @@ if __name__ == "__main__":
     load_dotenv()
     analyzer = LlamaRootCauseAnalyzer()
 
-    sample_logs = """
+    sample_logs = (
+        """
 2025-09-30 12:00:01 INFO Starting API server on port 3001
 2025-09-30 12:00:02 INFO Connecting to database at postgresql://postgres@postgres:5432/demo_db
 2025-09-30 12:00:03 ERROR Connection failed: getaddrinfo ENOTFOUND postgres
@@ -544,7 +569,9 @@ if __name__ == "__main__":
 2025-09-30 12:00:10 ERROR Connection failed: getaddrinfo ENOTFOUND postgres
 2025-09-30 12:00:15 FATAL Unable to connect to database after 5 retries. Exiting.
 2025-09-30 12:00:16 INFO Process exited with code 1
-""" * 10
+"""
+        * 10
+    )
 
     sample_compose = """
 version: '3.8'

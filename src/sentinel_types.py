@@ -73,9 +73,10 @@ class FixActionName(str, Enum):
     when it detects problems with monitored containers.
     """
     RESTART_CONTAINER = "restart_container"  # Restart a problematic container
-    UPDATE_CONFIG = "update_config"          # Update container configuration
-    PATCH_CODE = "patch_code"                # Apply code patches (future feature)
-    SCALE_RESOURCES = "scale_resources"      # Scale up/down container resources
+    UPDATE_ENV_VARS = "update_env_vars"      # Update environment variables for a container
+    UPDATE_RESOURCES = "update_resources"    # Update CPU and memory limits for a container
+    HEALTH_CHECK = "health_check"            # Check the health status of a container
+    GET_LOGS = "get_logs"                    # Get recent logs from a container
 
 
 class IncidentStatus(str, Enum):
