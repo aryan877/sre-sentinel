@@ -1,10 +1,27 @@
-"""Shared typed structures and helpers for SRE Sentinel."""
+"""
+Shared Pydantic models and type definitions for SRE Sentinel.
+
+This module contains all the core data structures used throughout the SRE Sentinel system.
+Each model is carefully designed with Pydantic to provide:
+- Runtime validation of incoming data
+- Automatic serialization/deserialization
+- Clear error messages for invalid data
+- Type hints for better IDE support
+
+The models represent:
+1. Anomaly detection results from Cerebras
+2. Root cause analysis from Llama
+3. Fix actions and their execution results
+4. Container state information
+5. Incident lifecycle data
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
 from typing import Mapping, Sequence, TypeVar, cast
+
+from pydantic import BaseModel, Field
 
 
 __all__ = [
@@ -18,63 +35,83 @@ __all__ = [
     "Incident",
     "IncidentStatus",
     "RootCauseAnalysis",
-    "SerializableMixin",
 ]
 
 
-class SerializableMixin:
-    """Provide ``to_dict`` for dataclasses with sensible defaults."""
-
-    def to_dict(self, *, include_none: bool = True) -> dict[str, object]:
-        result: dict[str, object] = {}
-        for field in fields(self):  # type: ignore[arg-type]
-            value = getattr(self, field.name)
-            if value is None and not include_none:
-                continue
-            result[field.name] = _serialise(value)
-        return result
-
-
 class AnomalyType(str, Enum):
-    CRASH = "crash"
-    ERROR = "error"
-    WARNING = "warning"
-    PERFORMANCE = "performance"
-    NONE = "none"
+    """
+    Types of anomalies that can be detected in container logs.
+    
+    These values correspond to the categories the AI model uses to classify
+    different types of issues it finds in log data.
+    """
+    CRASH = "crash"          # Application crashes or fatal errors
+    ERROR = "error"          # General errors that don't crash the app
+    WARNING = "warning"      # Warning messages that might indicate issues
+    PERFORMANCE = "performance"  # Performance-related issues
+    NONE = "none"            # No anomaly detected
 
 
 class AnomalySeverity(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    """
+    Severity levels for detected anomalies.
+    
+    These help prioritize which incidents need immediate attention.
+    Higher severity incidents are automatically processed first.
+    """
+    LOW = "low"              # Minor issues that can be addressed later
+    MEDIUM = "medium"        # Issues that should be addressed soon
+    HIGH = "high"            # Serious issues requiring prompt attention
+    CRITICAL = "critical"    # Critical issues requiring immediate action
 
 
 class FixActionName(str, Enum):
-    RESTART_CONTAINER = "restart_container"
-    UPDATE_CONFIG = "update_config"
-    PATCH_CODE = "patch_code"
-    SCALE_RESOURCES = "scale_resources"
+    """
+    Types of automated fixes that can be applied to containers.
+    
+    These represent the different remediation actions the system can take
+    when it detects problems with monitored containers.
+    """
+    RESTART_CONTAINER = "restart_container"  # Restart a problematic container
+    UPDATE_CONFIG = "update_config"          # Update container configuration
+    PATCH_CODE = "patch_code"                # Apply code patches (future feature)
+    SCALE_RESOURCES = "scale_resources"      # Scale up/down container resources
 
 
 class IncidentStatus(str, Enum):
-    ANALYZING = "analyzing"
-    RESOLVED = "resolved"
-    UNRESOLVED = "unresolved"
+    """
+    Status values for incident lifecycle tracking.
+    
+    These represent the different states an incident goes through
+    from detection to resolution.
+    """
+    ANALYZING = "analyzing"    # Incident detected, analysis in progress
+    RESOLVED = "resolved"      # Incident successfully resolved
+    UNRESOLVED = "unresolved"  # Incident could not be resolved automatically
 
 
-@dataclass(slots=True, frozen=True)
-class AnomalyDetectionResult(SerializableMixin):
-    """Structured result returned by the Cerebras anomaly detector."""
-
+class AnomalyDetectionResult(BaseModel):
+    """
+    Result of anomaly detection analysis from Cerebras AI model.
+    
+    This model captures the output from the anomaly detection service,
+    including whether an anomaly was found, how confident the model is,
+    and details about what type of anomaly was detected.
+    """
     is_anomaly: bool
-    confidence: float
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0")
     anomaly_type: AnomalyType
     severity: AnomalySeverity
-    summary: str
+    summary: str = Field(description="Human-readable summary of the detected anomaly")
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> "AnomalyDetectionResult":
+        """
+        Create an AnomalyDetectionResult from a raw mapping/dictionary.
+        
+        This method safely converts raw API responses into our validated model,
+        handling type coercion and validation.
+        """
         return cls(
             is_anomaly=_coerce_bool(payload.get("is_anomaly")),
             confidence=_coerce_float(payload.get("confidence")),
@@ -84,17 +121,26 @@ class AnomalyDetectionResult(SerializableMixin):
         )
 
 
-@dataclass(slots=True, frozen=True)
-class FixAction(SerializableMixin):
-    """Action suggested by the root cause analyzer."""
-
+class FixAction(BaseModel):
+    """
+    A specific fix action recommended by the AI analysis.
+    
+    This model represents a single remediation step that should be taken
+    to address an issue. It includes what action to take, what target
+    to apply it to, and details about how to perform the action.
+    """
     action: FixActionName
-    target: str
-    details: str
-    priority: int
+    target: str = Field(description="Container name or other target for the fix")
+    details: str = Field(description="Specific details about how to apply the fix")
+    priority: int = Field(ge=1, le=5, description="Priority from 1 (lowest) to 5 (highest)")
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> "FixAction":
+        """
+        Create a FixAction from a raw mapping/dictionary.
+        
+        Safely converts raw API responses into our validated model.
+        """
         priority_raw = payload.get("priority")
         if isinstance(priority_raw, bool):  # Guard against JSON "true"/"false"
             raise ValueError("priority cannot be boolean")
@@ -106,18 +152,26 @@ class FixAction(SerializableMixin):
         )
 
 
-@dataclass(slots=True)
-class FixExecutionResult(SerializableMixin):
-    """Structured response after executing a fix through the MCP orchestrator."""
-
-    success: bool
-    message: str | None = None
-    error: str | None = None
-    status: str | None = None
-    details: str | None = None
+class FixExecutionResult(BaseModel):
+    """
+    Result of executing a fix action through the MCP orchestrator.
+    
+    This model captures the outcome of attempting to apply a fix,
+    including whether it succeeded and any relevant messages or errors.
+    """
+    success: bool = Field(description="Whether the fix was successfully applied")
+    message: str | None = Field(default=None, description="Success message from the fix execution")
+    error: str | None = Field(default=None, description="Error message if the fix failed")
+    status: str | None = Field(default=None, description="Status code from the fix execution")
+    details: str | None = Field(default=None, description="Additional details about the execution")
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> "FixExecutionResult":
+        """
+        Create a FixExecutionResult from a raw mapping/dictionary.
+        
+        Safely converts raw API responses into our validated model.
+        """
         return cls(
             success=_coerce_bool(payload.get("success")),
             message=_coerce_optional_str(payload.get("message")),
@@ -127,19 +181,29 @@ class FixExecutionResult(SerializableMixin):
         )
 
 
-@dataclass(slots=True, frozen=True)
-class RootCauseAnalysis(SerializableMixin):
-    """High-level analysis returned by the Llama analyzer."""
-
-    root_cause: str
-    explanation: str
-    affected_components: tuple[str, ...]
-    suggested_fixes: tuple[FixAction, ...]
-    confidence: float
-    prevention: str
+class RootCauseAnalysis(BaseModel):
+    """
+    Comprehensive root cause analysis from Llama AI model.
+    
+    This model captures the detailed analysis of why an incident occurred,
+    what components were affected, and what fixes should be applied.
+    It represents the "deep thinking" output from the AI analyzer.
+    """
+    root_cause: str = Field(description="Primary cause of the incident")
+    explanation: str = Field(description="Detailed explanation of the root cause analysis")
+    affected_components: tuple[str, ...] = Field(description="List of components affected by the incident")
+    suggested_fixes: tuple[FixAction, ...] = Field(description="Recommended fixes to resolve the incident")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0")
+    prevention: str = Field(description="Recommendations for preventing similar incidents in the future")
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> "RootCauseAnalysis":
+        """
+        Create a RootCauseAnalysis from a raw mapping/dictionary.
+        
+        Safely converts raw API responses into our validated model,
+        including nested FixAction objects.
+        """
         actions_raw = payload.get("suggested_fixes")
         if not isinstance(actions_raw, Sequence) or isinstance(actions_raw, (str, bytes)):
             raise ValueError("suggested_fixes must be a sequence")
@@ -162,59 +226,46 @@ class RootCauseAnalysis(SerializableMixin):
         )
 
 
-@dataclass(slots=True)
-class ContainerState(SerializableMixin):
-    """Lightweight snapshot of a monitored container."""
-
-    id: str | None
-    name: str | None
-    service: str
-    status: str
-    restarts: int | None
-    cpu: float
-    memory: float
-    timestamp: str
-
-
-@dataclass(slots=True)
-class Incident(SerializableMixin):
-    """Captured incident life-cycle data."""
-
-    id: str
-    service: str
-    detected_at: str
-    anomaly: AnomalyDetectionResult
-    status: IncidentStatus
-    analysis: RootCauseAnalysis | None = None
-    fixes: tuple[FixExecutionResult, ...] = ()
-    resolved_at: str | None = None
-    explanation: str | None = None
-
-
-def _serialise(value: object) -> object:
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, Mapping):
-        return {key: _serialise(val) for key, val in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [_serialise(item) for item in value]
-    if not is_dataclass(value):
-        return value
+class ContainerState(BaseModel):
+    """
+    Current state snapshot of a monitored container.
     
-    # At this point, value is a dataclass
-    # Check if it has to_dict method (SerializableMixin)
-    to_dict_method = getattr(value, "to_dict", None)
-    if callable(to_dict_method):
-        return to_dict_method()
+    This model captures the real-time status of a container, including
+    its resource usage and operational status. It's updated regularly
+    as the monitoring system tracks container health.
+    """
+    id: str | None = Field(default=None, description="Container ID")
+    name: str | None = Field(default=None, description="Container name")
+    service: str = Field(description="Service name the container belongs to")
+    status: str = Field(description="Current operational status (running, stopped, etc.)")
+    restarts: int | None = Field(default=None, description="Number of times the container has restarted")
+    cpu: float = Field(ge=0.0, description="Current CPU usage percentage")
+    memory: float = Field(ge=0.0, description="Current memory usage percentage")
+    timestamp: str = Field(description="Timestamp when this state was captured")
+
+
+class Incident(BaseModel):
+    """
+    Complete incident record from detection to resolution.
     
-    # Fallback: serialize dataclass fields manually
-    serialised: dict[str, object] = {}
-    for field in fields(value):
-        serialised[field.name] = _serialise(getattr(value, field.name))
-    return serialised
+    This model tracks the entire lifecycle of an incident, from when it was
+    first detected through analysis, fix attempts, and final resolution.
+    It serves as the central record for all incident-related data.
+    """
+    id: str = Field(description="Unique incident identifier")
+    service: str = Field(description="Service name where the incident occurred")
+    detected_at: str = Field(description="Timestamp when the incident was first detected")
+    anomaly: AnomalyDetectionResult = Field(description="Anomaly that triggered this incident")
+    status: IncidentStatus = Field(description="Current status of the incident")
+    analysis: RootCauseAnalysis | None = Field(default=None, description="Root cause analysis results")
+    fixes: tuple[FixExecutionResult, ...] = Field(default=(), description="Results of applied fixes")
+    resolved_at: str | None = Field(default=None, description="Timestamp when the incident was resolved")
+    explanation: str | None = Field(default=None, description="Human-friendly explanation of the incident")
 
 
+# Helper functions for type coercion and validation
 def _coerce_bool(value: object) -> bool:
+    """Safely convert a value to boolean, handling various input types."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -229,6 +280,7 @@ def _coerce_bool(value: object) -> bool:
 
 
 def _coerce_float(value: object) -> float:
+    """Safely convert a value to float, handling various input types."""
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
@@ -237,6 +289,7 @@ def _coerce_float(value: object) -> float:
 
 
 def _coerce_str(value: object) -> str:
+    """Safely convert a value to string, handling various input types."""
     if isinstance(value, str):
         return value
     if value is None:
@@ -245,6 +298,7 @@ def _coerce_str(value: object) -> str:
 
 
 def _coerce_optional_str(value: object) -> str | None:
+    """Safely convert a value to optional string, handling None values."""
     if value is None:
         return None
     return _coerce_str(value)
@@ -254,6 +308,7 @@ EnumT = TypeVar("EnumT", bound=Enum)
 
 
 def _coerce_enum(value: object, enum_cls: type[EnumT]) -> EnumT:
+    """Safely convert a value to an enum member, handling string inputs."""
     if isinstance(value, enum_cls):
         return value
     if isinstance(value, str):
@@ -264,6 +319,7 @@ def _coerce_enum(value: object, enum_cls: type[EnumT]) -> EnumT:
 
 
 def _ensure_mapping(value: object, field_name: str) -> Mapping[str, object]:
+    """Ensure a value is a mapping, raising a clear error if not."""
     if isinstance(value, Mapping):
         return cast(Mapping[str, object], value)
     raise ValueError(f"Expected {field_name} items to be mappings, received {type(value).__name__}")

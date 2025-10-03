@@ -44,7 +44,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             reason: {
               type: "string",
-              description: "Reason for restarting the container (for audit logs)",
+              description:
+                "Reason for restarting the container (for audit logs)",
             },
           },
           required: ["container_name"],
@@ -160,35 +161,116 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { container_name, resources } = args;
         const container = docker.getContainer(container_name);
 
-        // Convert resource limits
-        const updateConfig = {};
-        if (resources.memory) {
-          // Convert "512m" to bytes
-          const match = resources.memory.match(/^(\d+)([kmg]?)$/i);
-          if (match) {
-            const [, value, unit] = match;
-            const multiplier = { k: 1024, m: 1024 * 1024, g: 1024 * 1024 * 1024 };
-            updateConfig.Memory = parseInt(value) * (multiplier[unit?.toLowerCase()] || 1);
+        try {
+          // Validate resource inputs
+          const validationErrors = [];
+          const updateConfig = {};
+
+          if (resources.memory) {
+            // Validate memory format
+            const match = resources.memory.match(/^(\d+)([kmg]?)$/i);
+            if (!match) {
+              validationErrors.push(
+                `Invalid memory format: ${resources.memory}. Use format like "512m", "1g", etc.`
+              );
+            } else {
+              const [, value, unit] = match;
+              const multiplier = {
+                k: 1024,
+                m: 1024 * 1024,
+                g: 1024 * 1024 * 1024,
+              };
+              const memoryBytes =
+                parseInt(value) * (multiplier[unit?.toLowerCase()] || 1);
+
+              // Validate memory limits (minimum 4MB)
+              if (memoryBytes < 4 * 1024 * 1024) {
+                validationErrors.push(
+                  `Memory too low: ${memoryBytes} bytes. Minimum is 4MB.`
+                );
+              } else {
+                updateConfig.Memory = memoryBytes;
+              }
+            }
           }
-        }
-        if (resources.cpu) {
-          updateConfig.NanoCPUs = parseFloat(resources.cpu) * 1e9;
-        }
 
-        await container.update(updateConfig);
+          if (resources.cpu) {
+            // Validate CPU format
+            const cpuValue = parseFloat(resources.cpu);
+            if (isNaN(cpuValue) || cpuValue <= 0) {
+              validationErrors.push(
+                `Invalid CPU value: ${resources.cpu}. Must be a positive number.`
+              );
+            } else if (cpuValue > 64) {
+              // Reasonable upper limit
+              validationErrors.push(
+                `CPU value too high: ${cpuValue}. Maximum is 64.`
+              );
+            } else {
+              updateConfig.NanoCPUs = cpuValue * 1e9;
+            }
+          }
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                success: true,
-                message: `Resources updated for ${container_name}`,
-                updates: updateConfig,
-              }),
-            },
-          ],
-        };
+          // Return validation errors if any
+          if (validationErrors.length > 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    message: "Resource validation failed",
+                    errors: validationErrors,
+                  }),
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          // Get current container info to compare with new settings
+          const containerInfo = await container.inspect();
+          const currentMemory = containerInfo.HostConfig.Memory || 0;
+          const currentCpu = containerInfo.HostConfig.NanoCPUs || 0;
+
+          // Apply the updates
+          await container.update(updateConfig);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  success: true,
+                  message: `Resources updated for ${container_name}`,
+                  updates: updateConfig,
+                  previous: {
+                    memory: currentMemory,
+                    cpu: currentCpu / 1e9,
+                  },
+                  new: {
+                    memory: updateConfig.Memory || currentMemory,
+                    cpu: (updateConfig.NanoCPUs || currentCpu) / 1e9,
+                  },
+                }),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  success: false,
+                  error: error.message,
+                  tool: name,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       case "get_logs": {

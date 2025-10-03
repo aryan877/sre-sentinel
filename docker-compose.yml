@@ -47,6 +47,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis for event bus and persistence
+  redis:
+    image: redis:7-alpine
+    container_name: sre-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # MCP Gateway for managing Docker containers
   mcp-gateway:
     image: docker/mcp-gateway:latest
@@ -56,13 +72,26 @@ services:
         "--transport=streaming",
         "--port=8811",
         "--servers=docker-control,config-patcher",
+        "--interceptor",
+        "before:exec:echo 'MCP Request: $$' >> /var/log/mcp-requests.log",
+        "--interceptor",
+        "after:exec:echo 'MCP Response: $$' >> /var/log/mcp-responses.log",
+        "--log-calls",
+        "--verbose"
       ]
     ports:
       - "8811:8811"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./mcp-servers:/mcp-servers:ro
+      - ./logs:/var/log
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8811/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # SRE Sentinel monitoring agent
   sre-sentinel:
@@ -77,6 +106,8 @@ services:
       - MCP_GATEWAY_URL=${MCP_GATEWAY_URL:-http://mcp-gateway:8811}
       - API_PORT=${API_PORT:-8000}
       - AUTO_HEAL_ENABLED=${AUTO_HEAL_ENABLED:-true}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "8000:8000" # HTTP + WebSocket API
     volumes:
@@ -85,6 +116,7 @@ services:
     depends_on:
       - api
       - postgres
+      - redis
       - mcp-gateway
     restart: unless-stopped
     extra_hosts:
@@ -92,6 +124,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   default:
