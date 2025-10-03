@@ -100,10 +100,6 @@ class RedisSettings(BaseModel):
 
 
 # Constants for Redis configuration
-_DEFAULT_HOST: str = "localhost"
-_DEFAULT_PORT: int = 6379
-_DEFAULT_DB: int = 0
-_DEFAULT_MAX_CONNECTIONS: int = 10
 _EVENT_CHANNEL: str = "sre-sentinel-events"  # Channel for event pub/sub
 _EVENT_HISTORY_KEY: str = "sre-sentinel-events-history"  # Key for event history list
 _MAX_HISTORY_SIZE: int = 1000  # Maximum number of events to keep in history
