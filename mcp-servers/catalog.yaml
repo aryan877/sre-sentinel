@@ -2,7 +2,7 @@ name: sre-sentinel-catalog
 displayName: SRE Sentinel Catalog
 registry:
   docker-control:
-    description: "Secure Docker container management (restart, health checks, resource updates)"
+    description: "Secure Docker container management (restart, health checks, resource updates, command execution)"
     title: "Docker Control"
     type: "server"
     dateAdded: "2025-10-04T00:00:00Z"
@@ -16,6 +16,8 @@ registry:
         description: "Update CPU and memory limits for a container"
       - name: "get_logs"
         description: "Get recent logs from a container"
+      - name: "exec_command"
+        description: "Execute a command inside a running container for diagnostics or remediation"
     env:
       - name: "NODE_ENV"
         value: "production"

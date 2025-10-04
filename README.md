@@ -53,6 +53,7 @@ SRE Sentinel uses the Model Context Protocol (MCP) to securely interact with con
    - `health_check`: Check container health status
    - `update_resources`: Update CPU and memory limits
    - `get_logs`: Retrieve recent container logs
+   - `exec_command`: Execute commands inside containers for diagnostics or remediation
 
 2. **Config Patcher Server** (`mcp-servers/config-patcher/`)
    - `update_env_vars`: Update environment variables for containers

@@ -101,6 +101,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["container_name"],
         },
       },
+      {
+        name: "exec_command",
+        description: "Execute a command inside a running container for diagnostics or remediation",
+        inputSchema: {
+          type: "object",
+          properties: {
+            container_name: {
+              type: "string",
+              description: "Name or ID of the container",
+            },
+            command: {
+              type: "array",
+              items: {
+                type: "string",
+              },
+              description: "Command to execute as array (e.g., ['sh', '-c', 'ls /tmp'])",
+            },
+            timeout: {
+              type: "number",
+              description: "Command timeout in seconds (default: 30, max: 120)",
+            },
+          },
+          required: ["container_name", "command"],
+        },
+      },
     ],
   };
 });
@@ -295,6 +320,107 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
+      }
+
+      case "exec_command": {
+        const { container_name, command, timeout = 30 } = args;
+        const container = docker.getContainer(container_name);
+
+        try {
+          // Validate timeout
+          const effectiveTimeout = Math.min(Math.max(timeout, 1), 120);
+
+          // Validate command is array
+          if (!Array.isArray(command) || command.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    success: false,
+                    error: "Command must be a non-empty array",
+                  }),
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          // Create exec instance
+          const exec = await container.exec({
+            Cmd: command,
+            AttachStdout: true,
+            AttachStderr: true,
+          });
+
+          // Start exec with timeout
+          const execStream = await exec.start({ Detach: false });
+
+          let output = "";
+          let timeoutHandle;
+          let completed = false;
+
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutHandle = setTimeout(() => {
+              if (!completed) {
+                reject(new Error(`Command execution timed out after ${effectiveTimeout}s`));
+              }
+            }, effectiveTimeout * 1000);
+          });
+
+          const streamPromise = new Promise((resolve, reject) => {
+            execStream.on("data", (chunk) => {
+              output += chunk.toString("utf-8");
+            });
+
+            execStream.on("end", () => {
+              completed = true;
+              clearTimeout(timeoutHandle);
+              resolve();
+            });
+
+            execStream.on("error", (err) => {
+              completed = true;
+              clearTimeout(timeoutHandle);
+              reject(err);
+            });
+          });
+
+          await Promise.race([streamPromise, timeoutPromise]);
+
+          // Get exit code
+          const inspectData = await exec.inspect();
+          const exitCode = inspectData.ExitCode;
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  success: exitCode === 0,
+                  output: output,
+                  exit_code: exitCode,
+                  command: command.join(" "),
+                  container: container_name,
+                }),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  success: false,
+                  error: error.message,
+                  tool: name,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       default:

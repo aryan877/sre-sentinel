@@ -93,11 +93,12 @@ Given comprehensive system context, perform root cause analysis and provide acti
 
 Available MCP Gateway tools will be provided in the user message. Use only the tools listed there.
 
-For each fix, provide structured JSON parameters that match the tool's input schema. 
+For each fix, provide structured JSON parameters that match the tool's input schema.
 For example:
 - For restart_container: {"container_name": "service-name", "reason": "description"}
 - For update_env_vars: {"container_name": "service-name", "env_updates": {"KEY": "value"}}
 - For update_resources: {"container_name": "service-name", "resources": {"memory": "512m", "cpu": "0.5"}}
+- For exec_command: {"container_name": "service-name", "command": ["sh", "-c", "rm -rf /tmp/*.lock"], "timeout": 30}
 
 Respond ONLY with a JSON object in this format:
 {
