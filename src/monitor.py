@@ -505,7 +505,7 @@ class SRESentinel:
                     network_tx += float(tx_bytes)
 
         blkio_stats = dict(stats.get("blkio_stats") or {})
-        io_service_bytes = dict(blkio_stats.get("io_service_bytes_recursive") or [])
+        io_service_bytes = blkio_stats.get("io_service_bytes_recursive") or []
         for entry in io_service_bytes:
             if isinstance(entry, dict):
                 op = entry.get("op", "")
@@ -860,16 +860,16 @@ async def main() -> None:
     api_task = asyncio.create_task(server.serve())
 
     try:
-        await asyncio.wait(
-            {monitor_task, api_task}, return_when=asyncio.FIRST_EXCEPTION
-        )
+        # Run both tasks concurrently
+        await asyncio.gather(monitor_task, api_task)
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down gracefully...[/yellow]")
     finally:
         if not monitor_task.done():
             monitor_task.cancel()
         server.should_exit = True
-        await api_task
+        if not api_task.done():
+            await api_task
         await event_bus.disconnect()
 
 

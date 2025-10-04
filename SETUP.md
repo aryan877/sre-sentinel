@@ -156,35 +156,12 @@ SRE Sentinel uses two MCP servers for container management:
 
 1. Create a new MCP server in `mcp-servers/your-server/`
 2. Implement your tools following the MCP specification
-3. Update `mcp-servers/catalog.json` with server information:
+3. Add the server definition to `mcp-servers/catalog.yaml` (follow the existing entries for structure and metadata).
 
-```json
-{
-  "name": "your-server",
-  "description": "Description of your server",
-  "category": "infrastructure",
-  "command": "node",
-  "args": ["./your-server/index.js"],
-  "tools": ["your_tool_name"],
-  "metadata": {
-    "owner": "Your Organization",
-    "version": "1.0.0",
-    "security_level": "high"
-  }
-}
-```
+4. Rebuild the MCP server images so the gateway can start the new server:
 
-4. Update the MCP Gateway configuration in `docker-compose.yml` to include your server:
-
-```yaml
-mcp-gateway:
-  # ... other configuration
-  command: [
-      "--transport=streaming",
-      "--port=8811",
-      "--servers=docker-control,config-patcher,your-server",
-      # ... other options
-    ]
+```bash
+./mcp-servers/build-servers.sh
 ```
 
 5. Restart the MCP Gateway:

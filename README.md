@@ -90,13 +90,19 @@ The MCP orchestrator automatically discovers available tools from the MCP gatewa
    # Edit .env with your API keys and configuration
    ```
 
-3. **Start the system**:
+3. **Run the project setup** (installs deps and builds MCP images):
+
+   ```bash
+   ./scripts/setup.sh
+   ```
+
+4. **Start the system**:
 
    ```bash
    docker-compose up -d
    ```
 
-4. **View the dashboard**:
+5. **View the dashboard**:
    Open http://localhost:8000 in your browser
 
 ## 🔧 Configuration
@@ -188,8 +194,18 @@ curl -X POST http://localhost:8811/mcp/call \
 
 1. Create a new MCP server in `mcp-servers/your-server/`
 2. Implement your tools following the MCP specification
-3. Update `mcp-servers/catalog.json` with server information
-4. Restart the MCP Gateway to load the new server
+3. Add the server definition to `mcp-servers/catalog.yaml`
+4. Rebuild the MCP server images:
+
+   ```bash
+   ./mcp-servers/build-servers.sh
+   ```
+
+5. Restart the MCP Gateway to load the new server:
+
+   ```bash
+   docker-compose restart mcp-gateway
+   ```
 
 ### Custom AI Analysis
 

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Demo microservice: Simple Node.js API
   api:
@@ -68,30 +66,18 @@ services:
     image: docker/mcp-gateway:latest
     container_name: mcp-gateway
     command:
-      [
-        "--transport=streaming",
-        "--port=8811",
-        "--servers=docker-control,config-patcher",
-        "--interceptor",
-        "before:exec:echo 'MCP Request: $$' >> /var/log/mcp-requests.log",
-        "--interceptor",
-        "after:exec:echo 'MCP Response: $$' >> /var/log/mcp-responses.log",
-        "--log-calls",
-        "--verbose"
-      ]
+      - --transport=streaming
+      - --port=8811
+      - --catalog=/mcp-servers/catalog.yaml
+      - --enable-all-servers
+      - --verbose
+      - --log-calls
     ports:
       - "8811:8811"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./mcp-servers:/mcp-servers:ro
-      - ./logs:/var/log
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8811/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
   # SRE Sentinel monitoring agent
   sre-sentinel:

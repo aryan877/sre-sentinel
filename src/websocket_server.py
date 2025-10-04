@@ -68,7 +68,7 @@ def build_application(sentinel: SentinelAPI, event_bus: RedisEventBus) -> FastAP
         """Get incident history."""
         return sentinel.snapshot_incidents()
 
-    @app.websocket("/ws", tags=["Real-time"])
+    @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
         """WebSocket endpoint for real-time event streaming."""
         await websocket.accept()

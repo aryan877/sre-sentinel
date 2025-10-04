@@ -11,4 +11,3 @@ rich>=13.9.0
 tenacity>=9.0.0
 redis>=5.1.0
 mcp>=1.0.0  # Model Context Protocol Python SDK
-black>=24.0.0

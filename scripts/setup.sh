@@ -1,101 +1,93 @@
 #!/bin/bash
 
 ##
-# SRE Sentinel Setup Script
-# Initializes the complete project environment
+# SRE Sentinel - Simple Setup Script
+# Sets up the environment and builds necessary images
 ##
 
 set -e
 
-echo "🛡️  SRE Sentinel - Setup Script"
-echo "========================================"
+echo "🛡️  SRE Sentinel - Setup"
+echo "================================"
 echo ""
 
-# Check Docker
+# Check prerequisites
+echo "Checking prerequisites..."
+
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Error: Docker is not running"
+    echo "❌ Docker is not running"
     exit 1
 fi
-
 echo "✓ Docker is running"
 
-# Check Python
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Error: Python 3 is not installed"
+    echo "❌ Python 3 is not installed"
     exit 1
 fi
-
 echo "✓ Python 3 found"
 
-# Check Node.js
 if ! command -v node &> /dev/null; then
-    echo "❌ Error: Node.js is not installed"
+    echo "❌ Node.js is not installed"
     exit 1
 fi
-
 echo "✓ Node.js found"
+
 echo ""
 
-# Create .env file if it doesn't exist
+# Environment setup
 if [ ! -f .env ]; then
-    echo "📝 Creating .env file..."
-    cp .env.example .env
-    echo "⚠️  Please edit .env and add your API keys:"
-    echo "   - CEREBRAS_API_KEY"
-    echo "   - LLAMA_API_KEY"
-    echo ""
-    read -p "Press Enter when you've added your keys..."
+    echo "📝 Creating .env file from .env.example..."
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        echo "⚠️  Please edit .env and add your API keys:"
+        echo "   - CEREBRAS_API_KEY"
+        echo "   - LLAMA_API_KEY"
+        echo ""
+        read -p "Press Enter when ready to continue..."
+    else
+        echo "❌ .env.example not found!"
+        exit 1
+    fi
 fi
 
 # Install Python dependencies
 echo ""
 echo "📦 Installing Python dependencies..."
-cd src
-python3 -m pip install -r requirements.txt --quiet
+python3 -m pip install -r src/requirements.txt --quiet
+
+# Build MCP server images
+echo ""
+echo "🐳 Building MCP server images..."
+cd mcp-servers
+chmod +x build-servers.sh
+./build-servers.sh
 cd ..
 
-# Install Node.js dependencies for dashboard
+# Build main application
 echo ""
-echo "📦 Installing dashboard dependencies..."
-cd dashboard
-npm install --silent
-cd ..
-
-# Install MCP server dependencies
-echo ""
-echo "📦 Installing MCP server dependencies..."
-cd mcp-servers/docker-control
-npm install --silent
-cd ../config-patcher
-npm install --silent
-cd ../..
-
-# Build demo app
-echo ""
-echo "🏗️  Building demo infrastructure..."
-docker-compose build
+echo "🏗️  Building SRE Sentinel..."
+docker compose build
 
 echo ""
-echo "========================================"
+echo "================================"
 echo "✅ Setup complete!"
 echo ""
 echo "🚀 Quick Start:"
 echo ""
-echo "1. Start everything (includes MCP Gateway):"
-echo "   docker-compose up -d"
+echo "1. Start all services:"
+echo "   docker compose up -d"
 echo ""
-echo "2. Start the dashboard:"
-echo "   cd dashboard && npm run dev"
+echo "2. View logs:"
+echo "   docker compose logs -f"
 echo ""
-echo "3. Open dashboard:"
-echo "   http://localhost:5173"
+echo "3. Stop services:"
+echo "   docker compose down"
 echo ""
-echo "4. Break something to test:"
-echo "   ./scripts/break-service.sh"
+echo "📊 Services:"
+echo "   • Demo API: http://localhost:3001"
+echo "   • SRE Sentinel: http://localhost:8000"
+echo "   • MCP Gateway: http://localhost:8811"
+echo "   • PostgreSQL: localhost:5432"
+echo "   • Redis: localhost:6379"
 echo ""
-echo "📊 Dashboard: http://localhost:5173"
-echo "🔧 Demo API: http://localhost:3001"
-echo "🛡️ SRE Sentinel: http://localhost:8000"
-echo "🔌 MCP Gateway: http://localhost:8811"
-echo ""
-echo "========================================"
+echo "================================"

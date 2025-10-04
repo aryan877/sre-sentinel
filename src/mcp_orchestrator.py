@@ -80,10 +80,31 @@ class MCPOrchestrator:
 
     async def _connect_to_gateway(self) -> None:
         """Connect to the MCP gateway."""
-        self._client_context = streamablehttp_client(f"{self.settings.gateway_url}/mcp")
-        read, write, _ = await self._client_context.__aenter__()
-        self._session = ClientSession(read, write)
-        await self._session.initialize()
+        # Try different endpoint paths based on transport mode
+        endpoints = ["/mcp", "/sse", ""]
+
+        for endpoint in endpoints:
+            try:
+                url = f"{self.settings.gateway_url}{endpoint}"
+                console.print(f"[dim]Trying to connect to MCP Gateway at {url}[/dim]")
+                self._client_context = streamablehttp_client(url)
+                read, write, _ = await self._client_context.__aenter__()
+                self._session = ClientSession(read, write)
+                await self._session.initialize()
+                console.print(f"[green]✓ Connected to MCP Gateway at {url}[/green]")
+                return
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Failed to connect to {url}: {e}[/yellow]")
+                if self._client_context:
+                    try:
+                        await self._client_context.__aexit__(None, None, None)
+                    except:
+                        pass
+                    self._client_context = None
+                continue
+
+        # If all endpoints failed, raise the last exception
+        raise Exception("Failed to connect to MCP Gateway on any endpoint")
 
     async def _discover_tools(self) -> None:
         """Discover available tools from the MCP gateway."""
