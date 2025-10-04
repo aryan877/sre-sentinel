@@ -21,11 +21,11 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 
-from ai.cerebras_client import CerebrasAnomalyDetector
-from infrastructure.redis_event_bus import RedisEventBus, create_redis_event_bus
-from ai.llama_analyzer import LlamaRootCauseAnalyzer
-from .orchestrator import MCPOrchestrator
-from ..models.sentinel_types import (
+from src.ai.cerebras_client import CerebrasAnomalyDetector
+from src.infrastructure.redis_event_bus import RedisEventBus, create_redis_event_bus
+from src.ai.llama_analyzer import LlamaRootCauseAnalyzer
+from src.core.orchestrator import MCPOrchestrator
+from src.models.sentinel_types import (
     AnomalyDetectionResult,
     AnomalySeverity,
     BaseModel,

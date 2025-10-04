@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 import redis.asyncio as redis
 from rich.console import Console
 
-from ..models.sentinel_types import RedisMessage, RedisSettings
+from src.models.sentinel_types import RedisMessage, RedisSettings
 
 console = Console()
 

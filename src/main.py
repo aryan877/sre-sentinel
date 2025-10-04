@@ -14,9 +14,9 @@ import os
 from dotenv import load_dotenv
 from rich.console import Console
 
-from core.monitor import SRESentinel
-from infrastructure.redis_event_bus import create_redis_event_bus
-from api.websocket_server import build_application
+from src.core.monitor import SRESentinel
+from src.infrastructure.redis_event_bus import create_redis_event_bus
+from src.api.websocket_server import build_application
 
 console = Console()
 

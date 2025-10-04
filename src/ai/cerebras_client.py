@@ -11,9 +11,9 @@ from openai.types.chat import ChatCompletion
 from rich.console import Console
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from ..utils.api_key_detector import fallback_secret_detection
-from .openrouter_client import create_openrouter_client
-from ..models.sentinel_types import (
+from src.utils.api_key_detector import fallback_secret_detection
+from src.ai.openrouter_client import create_openrouter_client
+from src.models.sentinel_types import (
     AnomalyDetectionResult,
     AnomalySeverity,
     AnomalyType,
