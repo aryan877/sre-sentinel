@@ -14,4 +14,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
 # Run the monitoring agent
-CMD ["python", "src/monitor.py"]
+CMD ["python", "src/main.py"]

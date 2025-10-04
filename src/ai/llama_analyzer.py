@@ -11,16 +11,15 @@ from openai.types.chat import ChatCompletion
 from rich.console import Console
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from api_key_detector import redact_url_passwords
-from openrouter_client import create_openrouter_client
-from sentinel_types import (
+from ..utils.api_key_detector import redact_url_passwords
+from .openrouter_client import create_openrouter_client
+from ..models.sentinel_types import (
     RootCauseAnalysis,
     FixAction,
     FixActionName,
     LlamaSettings,
     AnalysisMessage,
     RootCausePayload,
-    FixActionPayload,
 )
 
 console = Console()

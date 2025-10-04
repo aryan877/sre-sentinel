@@ -11,8 +11,8 @@ from typing import Mapping, Protocol
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from redis_event_bus import RedisEventBus
-from sentinel_types import HealthResponse, BootstrapEvent
+from ..infrastructure.redis_event_bus import RedisEventBus
+from ..models.sentinel_types import HealthResponse, BootstrapEvent
 
 
 class SentinelAPI(Protocol):

@@ -21,11 +21,11 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 
-from cerebras_client import CerebrasAnomalyDetector
-from redis_event_bus import RedisEventBus, create_redis_event_bus
-from llama_analyzer import LlamaRootCauseAnalyzer
-from mcp_orchestrator import MCPOrchestrator
-from sentinel_types import (
+from ai.cerebras_client import CerebrasAnomalyDetector
+from infrastructure.redis_event_bus import RedisEventBus, create_redis_event_bus
+from ai.llama_analyzer import LlamaRootCauseAnalyzer
+from .orchestrator import MCPOrchestrator
+from ..models.sentinel_types import (
     AnomalyDetectionResult,
     AnomalySeverity,
     BaseModel,
@@ -782,7 +782,7 @@ async def main() -> None:
         )
         return
 
-    from websocket_server import build_application
+    from api.websocket_server import build_application
 
     app = build_application(sentinel, event_bus)
 

@@ -11,9 +11,9 @@ from openai.types.chat import ChatCompletion
 from rich.console import Console
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from api_key_detector import fallback_secret_detection
-from openrouter_client import create_openrouter_client
-from sentinel_types import (
+from ..utils.api_key_detector import fallback_secret_detection
+from .openrouter_client import create_openrouter_client
+from ..models.sentinel_types import (
     AnomalyDetectionResult,
     AnomalySeverity,
     AnomalyType,
@@ -96,8 +96,7 @@ class CerebrasAnomalyDetector:
         """Initialize the anomaly detector with API settings."""
         self.settings = settings or CerebrasSettings.from_env()
         self.client = create_openrouter_client(
-            api_key=self.settings.api_key,
-            base_url=self.settings.base_url
+            api_key=self.settings.api_key, base_url=self.settings.base_url
         )
 
     @retry(
@@ -122,11 +121,7 @@ class CerebrasAnomalyDetector:
                 temperature=0.1,
                 max_completion_tokens=300,
                 response_format={"type": "json_object"},
-                extra_body={
-                    "provider": {
-                        "order": ["Cerebras"]
-                    }
-                }
+                extra_body={"provider": {"order": ["Cerebras"]}},
             )
             anomaly = self._parse_completion(completion)
         except Exception as exc:
@@ -244,11 +239,7 @@ class CerebrasAnomalyDetector:
                 temperature=0.0,  # Deterministic classification
                 max_completion_tokens=500,
                 response_format={"type": "json_object"},
-                extra_body={
-                    "provider": {
-                        "order": ["Cerebras"]
-                    }
-                }
+                extra_body={"provider": {"order": ["Cerebras"]}},
             )
 
             message = completion.choices[0].message

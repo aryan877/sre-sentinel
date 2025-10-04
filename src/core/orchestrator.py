@@ -14,7 +14,12 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.types import Tool
 
-from sentinel_types import FixAction, FixActionName, FixExecutionResult, MCPSettings
+from ..models.sentinel_types import (
+    FixAction,
+    FixActionName,
+    FixExecutionResult,
+    MCPSettings,
+)
 
 console = Console()
 
