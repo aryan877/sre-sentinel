@@ -15,8 +15,6 @@ from ..utils.api_key_detector import redact_url_passwords
 from .openrouter_client import create_openrouter_client
 from ..models.sentinel_types import (
     RootCauseAnalysis,
-    FixAction,
-    FixActionName,
     LlamaSettings,
     AnalysisMessage,
     RootCausePayload,
@@ -56,7 +54,7 @@ Respond ONLY with a JSON object in this format:
         {
             "action": "tool_name_from_available_tools",
             "target": "service_name or file_path",
-            "parameters": {"structured": "json_parameters"},
+            "details": "JSON string of parameters for the tool execution",
             "priority": 1-5
         }
     ],
@@ -221,15 +219,7 @@ class LlamaRootCauseAnalyzer:
         except Exception as e:
             raise LlamaAnalyzerError(f"Invalid response format: {e}")
 
-        suggested_fixes = tuple(
-            FixAction(
-                action=FixActionName(fix.action),
-                target=fix.target,
-                details=json.dumps(fix.parameters),
-                priority=fix.priority,
-            )
-            for fix in payload.suggested_fixes
-        )
+        suggested_fixes = tuple(payload.suggested_fixes)
 
         return RootCauseAnalysis(
             root_cause=payload.root_cause,

@@ -1,5 +1,103 @@
 """
 Shared Pydantic models and type definitions for SRE Sentinel.
+
+VISUALIZATION & USAGE GUIDE:
+
+This file contains all the data models that flow through the SRE Sentinel system.
+Here's how they work together in practice:
+
+1. ANOMALY DETECTION FLOW:
+   Container logs → Cerebras AI → AnomalyDetectionResult → Incident creation
+
+2. ROOT CAUSE ANALYSIS FLOW:
+   Incident context → Llama AI → RootCauseAnalysis → FixAction[] → MCP execution
+
+3. REAL-TIME EVENT FLOW:
+   ContainerState/LogEvent → Redis EventBus → WebSocket → Dashboard
+
+TYPE VISUALIZATIONS:
+
+🔍 AnomalyDetectionResult (from Cerebras):
+{
+    "is_anomaly": true,
+    "confidence": 0.85,
+    "anomaly_type": "error",
+    "severity": "high",
+    "summary": "Database connection failures detected in API service"
+}
+
+🧠 RootCauseAnalysis (from Llama):
+{
+    "root_cause": "PostgreSQL container is not responding to connection attempts",
+    "explanation": "The API service is unable to establish connections to PostgreSQL...",
+    "affected_components": ["api", "postgres"],
+    "suggested_fixes": [
+        {
+            "action": "restart_container",
+            "target": "postgres",
+            "details": "{\"container_name\": \"postgres\", \"reason\": \"Database not responding\"}",
+            "priority": 4
+        }
+    ],
+    "confidence": 0.92,
+    "prevention": "Configure proper health checks and connection pooling"
+}
+
+🔧 FixAction (MCP Gateway Integration):
+This is the key type that bridges AI analysis with actual container operations.
+Each FixAction represents an MCP tool call:
+
+{
+    "action": "restart_container",        # MCP tool name from catalog.yaml
+    "target": "postgres",                 # Container/service to operate on
+    "details": "{\"container_name\": \"postgres\", \"reason\": \"Database not responding\"}",  # JSON parameters for MCP tool
+    "priority": 4                         # 1-5 priority (5=highest)
+}
+
+MCP TOOL EXAMPLES:
+- restart_container: {"container_name": "service-name", "reason": "description"}
+- update_env_vars: {"container_name": "service-name", "env_updates": {"KEY": "value"}}
+- exec_command: {"container_name": "service-name", "command": ["sh", "-c", "command"], "timeout": 30}
+- update_resources: {"container_name": "service-name", "resources": {"memory": "512m", "cpu": "0.5"}}
+
+📊 ContainerState (Real-time monitoring):
+{
+    "id": "abc123",
+    "name": "demo-api",
+    "service": "api",
+    "status": "running",
+    "restarts": 0,
+    "cpu": 15.2,
+    "memory": 45.8,
+    "network_rx": 1024.5,
+    "network_tx": 2048.1,
+    "disk_read": 0.0,
+    "disk_write": 512.3,
+    "timestamp": "2025-01-01T12:00:00Z"
+}
+
+🚨 Incident (Complete incident lifecycle):
+{
+    "id": "INC-20250101-120000",
+    "service": "api",
+    "detected_at": "2025-01-01T12:00:00Z",
+    "anomaly": { ... AnomalyDetectionResult ... },
+    "status": "resolved",
+    "analysis": { ... RootCauseAnalysis ... },
+    "fixes": [ ... FixExecutionResult ... ],
+    "resolved_at": "2025-01-01T12:05:00Z",
+    "explanation": "The PostgreSQL container was restarted successfully...",
+    "resolution_notes": "Service recovered within 5 minutes"
+}
+
+USAGE LOCATIONS:
+- Core monitoring: monitor.py uses ContainerState, Incident, AnomalyDetectionResult
+- AI analysis: llama_analyzer.py uses RootCauseAnalysis, FixAction
+- MCP integration: orchestrator.py consumes FixAction and produces FixExecutionResult
+- API layer: websocket_server.py serializes all types for dashboard
+- Event bus: redis_event_bus.py transmits event types (ContainerUpdateEvent, LogEvent, etc.)
+
+Each type is designed to be JSON-serializable for Redis pub/sub and WebSocket transmission.
 """
 
 from __future__ import annotations
@@ -29,7 +127,6 @@ __all__ = [
     "RedisMessage",
     # Internal Payloads
     "AnomalyPayload",
-    "FixActionPayload",
     "RootCausePayload",
     # Domain Models
     "AnomalyDetectionResult",
@@ -253,30 +350,13 @@ class AnomalyPayload(BaseModel):
         return v.lower()
 
 
-class FixActionPayload(BaseModel):
-    """Expected fix action structure from Llama response."""
-
-    action: str = Field(description="Type of fix action to perform")
-    target: str = Field(description="Container name or other target for the fix")
-    parameters: dict = Field(description="JSON parameters for the tool execution")
-    priority: int = Field(
-        ge=1, le=5, description="Priority from 1 (lowest) to 5 (highest)"
-    )
-
-    @field_validator("action")
-    @classmethod
-    def validate_action(cls, v: str) -> str:
-        """Normalize action to lowercase."""
-        return v.lower()
-
-
 class RootCausePayload(BaseModel):
     """Expected root cause analysis structure from Llama response."""
 
     root_cause: str
     explanation: str
     affected_components: list[str]
-    suggested_fixes: list[FixActionPayload]
+    suggested_fixes: list[FixAction]
     confidence: float = Field(ge=0.0, le=1.0)
     prevention: str
 
@@ -287,14 +367,39 @@ class RootCausePayload(BaseModel):
 
 
 class AnomalyDetectionResult(BaseModel):
-    """Result of anomaly detection analysis from Cerebras AI model."""
+    """
+    Result of anomaly detection analysis from Cerebras AI model.
 
-    is_anomaly: bool
+    This is the OUTPUT of Cerebras fast anomaly detection and the TRIGGER
+    for incident creation when severity is HIGH or CRITICAL.
+
+    EXAMPLE USAGE:
+    {
+        "is_anomaly": true,
+        "confidence": 0.85,
+        "anomaly_type": "error",
+        "severity": "high",
+        "summary": "Database connection failures detected in API service logs"
+    }
+
+    FLOW:
+    1. monitor.py streams container logs to Cerebras
+    2. Cerebras analyzes logs and returns AnomalyDetectionResult
+    3. If is_anomaly=true and severity=HIGH/CRITICAL → create incident
+    4. Incident triggers Llama root cause analysis
+    5. Results flow to dashboard via WebSocket
+
+    THRESHOLDS:
+    - LOW/MEDIUM severity → logged only, no incident
+    - HIGH/CRITICAL severity → incident created + root cause analysis
+    """
+
+    is_anomaly: bool = Field(description="Whether an anomaly was detected")
     confidence: float = Field(
         ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0"
     )
-    anomaly_type: AnomalyType
-    severity: AnomalySeverity
+    anomaly_type: AnomalyType = Field(description="Type of anomaly detected")
+    severity: AnomalySeverity = Field(description="Severity level of the anomaly")
     summary: str = Field(description="Human-readable summary of the detected anomaly")
 
 
@@ -357,19 +462,53 @@ class RootCauseAnalysis(BaseModel):
 
 
 class ContainerState(BaseModel):
-    """Current state snapshot of a monitored container."""
+    """
+    Current state snapshot of a monitored container.
 
-    id: str | None = Field(default=None, description="Container ID")
-    name: str | None = Field(default=None, description="Container name")
-    service: str = Field(description="Service name the container belongs to")
+    This is the REAL-TIME monitoring data that flows through the system.
+    ContainerState objects are created every 5 seconds and broadcast via WebSocket.
+
+    EXAMPLE USAGE:
+    {
+        "id": "abc123def456",
+        "name": "demo-api",
+        "service": "api",
+        "status": "running",
+        "restarts": 0,
+        "cpu": 15.2,
+        "memory": 45.8,
+        "network_rx": 1024.5,
+        "network_tx": 2048.1,
+        "disk_read": 0.0,
+        "disk_write": 512.3,
+        "timestamp": "2025-01-01T12:00:00Z"
+    }
+
+    FLOW:
+    1. monitor.py collects stats from Docker API every 5 seconds
+    2. Creates ContainerState object with current metrics
+    3. Publishes as ContainerUpdateEvent via Redis
+    4. WebSocket server broadcasts to dashboard
+    5. Dashboard displays real-time graphs and status
+
+    METRICS:
+    - CPU/Memory: Percentage usage (0-100)
+    - Network: Bytes per second (calculated from Docker stats)
+    - Disk: Bytes per second (calculated from Docker stats)
+    - Status: Docker container status (running, stopped, etc.)
+    """
+
+    id: str | None = Field(default=None, description="Container ID from Docker")
+    name: str | None = Field(default=None, description="Container name from Docker")
+    service: str = Field(description="Service name from docker-compose label")
     status: str = Field(
-        description="Current operational status (running, stopped, etc.)"
+        description="Current operational status (running, stopped, exited, etc.)"
     )
     restarts: int | None = Field(
         default=None, description="Number of times the container has restarted"
     )
-    cpu: float = Field(ge=0.0, description="Current CPU usage percentage")
-    memory: float = Field(ge=0.0, description="Current memory usage percentage")
+    cpu: float = Field(ge=0.0, description="Current CPU usage percentage (0-100)")
+    memory: float = Field(ge=0.0, description="Current memory usage percentage (0-100)")
     network_rx: float = Field(
         default=0.0, ge=0.0, description="Network receive rate (bytes/sec)"
     )
@@ -382,16 +521,62 @@ class ContainerState(BaseModel):
     disk_write: float = Field(
         default=0.0, ge=0.0, description="Disk write rate (bytes/sec)"
     )
-    timestamp: str = Field(description="Timestamp when this state was captured")
+    timestamp: str = Field(description="ISO timestamp when this state was captured")
 
 
 class Incident(BaseModel):
-    """Complete incident record from detection to resolution."""
+    """
+    Complete incident record from detection to resolution.
 
-    id: str = Field(description="Unique incident identifier")
+    This is the CORE DATA STRUCTURE that tracks the entire lifecycle of an incident
+    from initial anomaly detection through root cause analysis to fix execution.
+
+    EXAMPLE USAGE:
+    {
+        "id": "INC-20250101-120000",
+        "service": "api",
+        "detected_at": "2025-01-01T12:00:00Z",
+        "anomaly": {
+            "is_anomaly": true,
+            "confidence": 0.85,
+            "anomaly_type": "error",
+            "severity": "high",
+            "summary": "Database connection failures detected"
+        },
+        "status": "resolved",
+        "analysis": {
+            "root_cause": "PostgreSQL container not responding",
+            "explanation": "The API service cannot connect to database...",
+            "affected_components": ["api", "postgres"],
+            "suggested_fixes": [ ... FixAction objects ... ],
+            "confidence": 0.92,
+            "prevention": "Configure proper health checks"
+        },
+        "fixes": [
+            {
+                "success": true,
+                "message": "Container restarted successfully",
+                "details": "{\"restart_time\": \"2.3s\"}"
+            }
+        ],
+        "resolved_at": "2025-01-01T12:05:00Z",
+        "explanation": "The PostgreSQL container was restarted and service recovered",
+        "resolution_notes": "Service recovered within 5 minutes"
+    }
+
+    LIFECYCLE:
+    1. DETECTED: Created when AnomalyDetectionResult has HIGH/CRITICAL severity
+    2. ANALYZING: Llama performs root cause analysis
+    3. RESOLVED/UNRESOLVED: After fix execution attempts
+    4. Archived for historical tracking and dashboard display
+    """
+
+    id: str = Field(
+        description="Unique incident identifier (format: INC-YYYYMMDD-HHMMSS)"
+    )
     service: str = Field(description="Service name where the incident occurred")
     detected_at: str = Field(
-        description="Timestamp when the incident was first detected"
+        description="ISO timestamp when the incident was first detected"
     )
     anomaly: AnomalyDetectionResult = Field(
         description="Anomaly that triggered this incident"
@@ -404,7 +589,7 @@ class Incident(BaseModel):
         default=(), description="Results of applied fixes"
     )
     resolved_at: str | None = Field(
-        default=None, description="Timestamp when the incident was resolved"
+        default=None, description="ISO timestamp when the incident was resolved"
     )
     explanation: str | None = Field(
         default=None, description="Human-friendly explanation of the incident"

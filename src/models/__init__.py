@@ -26,7 +26,6 @@ __all__ = [
     "RedisMessage",
     # Internal Payloads
     "AnomalyPayload",
-    "FixActionPayload",
     "RootCausePayload",
     # Domain Models
     "AnomalyDetectionResult",
