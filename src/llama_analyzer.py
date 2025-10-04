@@ -5,81 +5,29 @@ Llama AI client for root cause analysis of incidents.
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Mapping
 
-from openai import OpenAI
 from openai.types.chat import ChatCompletion
-from pydantic import BaseModel, Field, field_validator
 from rich.console import Console
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from sentinel_types import RootCauseAnalysis, FixAction, FixActionName
+from api_key_detector import redact_url_passwords
+from openrouter_client import create_openrouter_client
+from sentinel_types import (
+    RootCauseAnalysis,
+    FixAction,
+    FixActionName,
+    LlamaSettings,
+    AnalysisMessage,
+    RootCausePayload,
+    FixActionPayload,
+)
 
 console = Console()
 
 
 class LlamaAnalyzerError(RuntimeError):
     """Custom exception for Llama analyzer errors."""
-
-
-class LlamaSettings(BaseModel):
-    """Configuration settings for Llama API access."""
-
-    api_key: str = Field(description="API key for Llama authentication")
-    base_url: str = Field(
-        default="https://openrouter.ai/api/v1", description="Base URL for the API"
-    )
-    model: str = Field(
-        default="meta-llama/llama-4-scout", description="Model name to use for analysis"
-    )
-
-    @classmethod
-    def from_env(cls) -> "LlamaSettings":
-        """Create settings from environment variables."""
-        api_key = os.getenv("LLAMA_API_KEY")
-        if not api_key:
-            raise ValueError("LLAMA_API_KEY not found in environment")
-        return cls(
-            api_key=api_key,
-            base_url=os.getenv("LLAMA_API_BASE", "https://openrouter.ai/api/v1"),
-            model=os.getenv("LLAMA_MODEL", "meta-llama/llama-4-scout"),
-        )
-
-
-class AnalysisMessage(BaseModel):
-    """Chat message structure for Llama API."""
-
-    role: str = Field(pattern="^(system|user|assistant)$")
-    content: str
-
-
-class FixActionPayload(BaseModel):
-    """Expected fix action structure from Llama response."""
-
-    action: str = Field(description="Type of fix action to perform")
-    target: str = Field(description="Container name or other target for the fix")
-    parameters: dict = Field(description="JSON parameters for the tool execution")
-    priority: int = Field(
-        ge=1, le=5, description="Priority from 1 (lowest) to 5 (highest)"
-    )
-
-    @field_validator("action")
-    @classmethod
-    def validate_action(cls, v: str) -> str:
-        """Normalize action to lowercase."""
-        return v.lower()
-
-
-class RootCausePayload(BaseModel):
-    """Expected root cause analysis structure from Llama response."""
-
-    root_cause: str
-    explanation: str
-    affected_components: list[str]
-    suggested_fixes: list[FixActionPayload]
-    confidence: float = Field(ge=0.0, le=1.0)
-    prevention: str
 
 
 _ANALYSIS_SYSTEM_PROMPT = """You are a world-class Site Reliability Engineer with deep expertise in:
@@ -140,12 +88,15 @@ Write two short paragraphs that cover:
 class LlamaRootCauseAnalyzer:
     """Deep root cause analysis using Llama 4 Scout's long context."""
 
-    def __init__(self, settings: LlamaSettings | None = None) -> None:
+    def __init__(
+        self, settings: LlamaSettings | None = None, cerebras_detector=None
+    ) -> None:
         """Initialize the root cause analyzer with API settings."""
         self.settings = settings or LlamaSettings.from_env()
-        self.client = OpenAI(
+        self.client = create_openrouter_client(
             api_key=self.settings.api_key, base_url=self.settings.base_url
         )
+        self.cerebras_detector = cerebras_detector  # For env var classification
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10)
@@ -186,6 +137,7 @@ class LlamaRootCauseAnalyzer:
                 max_tokens=2000,
                 response_format={"type": "json_object"},
                 stream=False,
+                extra_body={"provider": {"order": ["Cerebras"]}},
             )
         except Exception as exc:
             console.print(f"[red]Error contacting Llama API: {exc}[/red]")
@@ -217,6 +169,7 @@ class LlamaRootCauseAnalyzer:
                 temperature=0.7,
                 max_tokens=500,
                 stream=False,
+                extra_body={"provider": {"order": ["Cerebras"]}},
             )
         except Exception as exc:
             return f"Error generating explanation: {exc}"
@@ -313,7 +266,7 @@ class LlamaRootCauseAnalyzer:
         if environment_vars:
             sections.append(
                 "\n# Environment Variables\n"
-                + json.dumps(_redact_sensitive(environment_vars), indent=2)
+                + json.dumps(self._redact_sensitive(environment_vars), indent=2)
             )
 
         if docker_compose:
@@ -331,17 +284,43 @@ class LlamaRootCauseAnalyzer:
 
         return "\n".join(sections)
 
+    def _redact_sensitive(self, env_vars: Mapping[str, str]) -> Mapping[str, str]:
+        """
+        Redact sensitive information from environment variables using Cerebras classification.
 
-def _redact_sensitive(env_vars: Mapping[str, str]) -> Mapping[str, str]:
-    """Redact sensitive information from environment variables."""
-    redacted: dict[str, str] = {}
-    for key, value in env_vars.items():
-        lowered = key.lower()
-        if any(token in lowered for token in ("key", "secret", "password", "token")):
-            redacted[key] = "***REDACTED***"
-        else:
-            redacted[key] = value
-    return redacted
+        Falls back to intelligent pattern matching if Cerebras is unavailable.
+        Also redacts passwords embedded in URLs.
+        """
+        if not env_vars:
+            return {}
+
+        redacted: dict[str, str] = {}
+
+        # Use Cerebras to classify which env vars are sensitive
+        sensitive_keys: set[str] = set()
+
+        if self.cerebras_detector:
+            try:
+                env_var_names = list(env_vars.keys())
+                sensitive_keys = self.cerebras_detector.classify_sensitive_env_vars(
+                    env_var_names, env_vars
+                )
+            except Exception as exc:
+                console.print(
+                    f"[yellow]⚠️  Cerebras classification failed: {exc}[/yellow]"
+                )
+                # Fallback will be handled by classify_sensitive_env_vars
+                sensitive_keys = set()
+
+        # Redact sensitive keys completely, and redact passwords in URLs for others
+        for key, value in env_vars.items():
+            if key in sensitive_keys:
+                redacted[key] = "***REDACTED***"
+            else:
+                # Even for "safe" keys, redact embedded credentials in URLs
+                redacted[key] = redact_url_passwords(value)
+
+        return redacted
 
 
 if __name__ == "__main__":

@@ -6,48 +6,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-from typing import Dict, List, Optional, Any
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
 from rich.console import Console
 
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.types import Tool
 
-from sentinel_types import FixAction, FixActionName, FixExecutionResult
+from sentinel_types import FixAction, FixActionName, FixExecutionResult, MCPSettings
 
 console = Console()
-
-
-class MCPSettings(BaseModel):
-    """Configuration settings for the MCP gateway."""
-
-    gateway_url: str = Field(description="URL of the MCP gateway")
-    auto_heal_enabled: bool = Field(description="Whether automatic healing is enabled")
-    timeout: int = Field(default=30, description="Timeout for HTTP requests")
-    max_retries: int = Field(default=3, description="Maximum number of retries")
-
-    @field_validator("auto_heal_enabled", mode="before")
-    @classmethod
-    def validate_auto_heal_enabled(cls, v):
-        """Convert string values to boolean for auto_heal_enabled."""
-        if isinstance(v, str):
-            return v.strip().lower() in {"true", "1", "yes"}
-        return v
-
-    @classmethod
-    def from_env(cls) -> "MCPSettings":
-        """Create settings from environment variables."""
-        return cls(
-            gateway_url=os.getenv("MCP_GATEWAY_URL", "http://localhost:8811"),
-            auto_heal_enabled=os.getenv("AUTO_HEAL_ENABLED", "true").strip().lower()
-            == "true",
-            timeout=int(os.getenv("MCP_TIMEOUT", "30")),
-            max_retries=int(os.getenv("MCP_MAX_RETRIES", "3")),
-        )
-
 
 _HEALTH_CHECK_INTERVAL = 2
 _MAX_HEALTH_WAIT = 30
@@ -56,13 +25,13 @@ _MAX_HEALTH_WAIT = 30
 class MCPOrchestrator:
     """Orchestrates Docker container actions via MCP Gateway."""
 
-    def __init__(self, settings: Optional[MCPSettings] = None) -> None:
+    def __init__(self, settings: MCPSettings | None = None) -> None:
         """Initialize the MCP orchestrator with gateway settings."""
         self.settings = settings or MCPSettings.from_env()
         self._session: ClientSession | None = None
         self._client_context = None
-        self._available_tools: List[Tool] = []
-        self._tool_schemas: Dict[str, Dict[str, Any]] = {}
+        self._available_tools: list[Tool] = []
+        self._tool_schemas: dict[str, dict[str, Any]] = {}
 
     async def initialize(self) -> None:
         """Initialize MCP connection to the gateway and discover available tools."""
@@ -256,7 +225,7 @@ class MCPOrchestrator:
         return False
 
     async def _call_tool(
-        self, tool_name: str, args: Dict[str, Any]
+        self, tool_name: str, args: dict[str, Any]
     ) -> FixExecutionResult:
         """Call a tool on the MCP gateway."""
         try:
@@ -302,7 +271,7 @@ class MCPOrchestrator:
                 {"success": False, "message": str(exc), "error": str(exc)}
             )
 
-    async def list_available_tools(self) -> List[Tool]:
+    async def list_available_tools(self) -> list[Tool]:
         """List all available tools from the MCP gateway."""
         return self._available_tools.copy()
 

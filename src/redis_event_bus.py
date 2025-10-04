@@ -10,54 +10,11 @@ import os
 from collections.abc import AsyncIterator
 
 import redis.asyncio as redis
-from pydantic import BaseModel, Field
 from rich.console import Console
 
+from sentinel_types import RedisMessage, RedisSettings
+
 console = Console()
-
-
-class RedisMessage(BaseModel):
-    """Redis pub/sub message structure."""
-
-    type: str = Field(description="Message type from Redis pub/sub")
-    pattern: bytes | None = Field(
-        default=None, description="Pattern for pmessage subscriptions"
-    )
-    channel: bytes = Field(description="Channel the message was received on")
-    data: bytes = Field(description="Raw message data as bytes")
-
-
-class BootstrapEvent(BaseModel):
-    """Bootstrap event for initial state synchronization."""
-
-    type: str = Field(default="bootstrap", description="Event type identifier")
-    containers: list[dict[str, object]] = Field(description="Current container states")
-    incidents: list[dict[str, object]] = Field(description="Current incident states")
-
-
-class RedisSettings(BaseModel):
-    """Configuration settings for Redis connection."""
-
-    host: str = Field(default="localhost", description="Redis server host")
-    port: int = Field(default=6379, ge=1, le=65535, description="Redis server port")
-    db: int = Field(default=0, ge=0, description="Redis database number")
-    password: str | None = Field(
-        default=None, description="Password for Redis authentication"
-    )
-    max_connections: int = Field(
-        default=10, ge=1, le=100, description="Maximum connections in pool"
-    )
-
-    @classmethod
-    def from_env(cls) -> "RedisSettings":
-        """Create settings from environment variables."""
-        return cls(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            db=int(os.getenv("REDIS_DB", "0")),
-            password=os.getenv("REDIS_PASSWORD"),
-            max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "10")),
-        )
 
 
 _EVENT_CHANNEL = "sre-sentinel-events"

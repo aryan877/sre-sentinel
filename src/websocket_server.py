@@ -6,16 +6,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Mapping
+from typing import Mapping, Protocol
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 
 from redis_event_bus import RedisEventBus
+from sentinel_types import HealthResponse, BootstrapEvent
 
 
-class SentinelAPI(BaseModel):
+class SentinelAPI(Protocol):
     """Protocol for Sentinel API operations."""
 
     def snapshot_containers(self) -> list[dict[str, object]]:
@@ -25,20 +25,6 @@ class SentinelAPI(BaseModel):
     def snapshot_incidents(self) -> list[dict[str, object]]:
         """Get incident history."""
         ...
-
-
-class HealthResponse(BaseModel):
-    """Health check response model."""
-
-    status: str = Field(default="ok", description="Health status of the service")
-
-
-class BootstrapEvent(BaseModel):
-    """Bootstrap event for WebSocket clients."""
-
-    type: str = Field(default="bootstrap", description="Event type identifier")
-    containers: list[dict[str, object]] = Field(description="Current container states")
-    incidents: list[dict[str, object]] = Field(description="Current incident states")
 
 
 def build_application(sentinel: SentinelAPI, event_bus: RedisEventBus) -> FastAPI:

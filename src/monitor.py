@@ -18,7 +18,6 @@ import docker
 import docker.errors
 import docker.models.containers
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 
@@ -29,81 +28,20 @@ from mcp_orchestrator import MCPOrchestrator
 from sentinel_types import (
     AnomalyDetectionResult,
     AnomalySeverity,
+    BaseModel,
     ContainerState,
+    ContainerStats,
+    ContainerUpdateEvent,
     FixExecutionResult,
     Incident,
+    IncidentEvent,
     IncidentStatus,
+    IncidentUpdateEvent,
+    LogEntry,
+    LogEvent,
 )
 
 console = Console()
-
-
-class LogEntry(BaseModel):
-    """Structured log entry with timestamp and content."""
-
-    timestamp: str = Field(description="Timestamp when the log was generated")
-    line: str = Field(description="Content of the log line")
-
-
-class ContainerContext(BaseModel):
-    """Container context information for anomaly detection."""
-
-    status: str | None = Field(default=None, description="Current container status")
-    health: str | None = Field(default=None, description="Container health status")
-    restarts: int | None = Field(
-        default=None, description="Number of container restarts"
-    )
-    exit_code: int | None = Field(default=None, description="Container exit code")
-
-
-class ContainerStats(BaseModel):
-    """Container statistics and state information."""
-
-    status: str | None = Field(default=None, description="Current container status")
-    restarts: int | None = Field(
-        default=None, description="Number of container restarts"
-    )
-    created: str | None = Field(
-        default=None, description="Container creation timestamp"
-    )
-    exit_code: int | None = Field(default=None, description="Container exit code")
-
-
-class Event(BaseModel):
-    """Base event structure for all system events."""
-
-    type: str = Field(description="Type of the event")
-
-
-class ContainerUpdateEvent(BaseModel):
-    """Container state update event."""
-
-    type: str = Field(default="container_update", description="Event type identifier")
-    container: ContainerState = Field(description="Updated container state")
-
-
-class LogEvent(BaseModel):
-    """Log line event for real-time log streaming."""
-
-    type: str = Field(default="log", description="Event type identifier")
-    container: str = Field(description="Name of the container the log came from")
-    timestamp: str = Field(description="Timestamp when the log was generated")
-    message: str = Field(description="Content of the log line")
-
-
-class IncidentEvent(BaseModel):
-    """Incident creation event."""
-
-    type: str = Field(default="incident", description="Event type identifier")
-    incident: Incident = Field(description="Incident details")
-
-
-class IncidentUpdateEvent(BaseModel):
-    """Incident update event."""
-
-    type: str = Field(default="incident_update", description="Event type identifier")
-    incident: Incident = Field(description="Updated incident details")
-
 
 _MAX_LOG_BUFFER_SIZE = 2000
 _LOG_LINES_PER_CHECK_DEFAULT = 20
@@ -153,7 +91,7 @@ class SRESentinel:
         self.event_bus = event_bus
         self.docker_client = docker.from_env()
         self.cerebras = CerebrasAnomalyDetector()
-        self.llama = LlamaRootCauseAnalyzer()
+        self.llama = LlamaRootCauseAnalyzer(cerebras_detector=self.cerebras)
         self.mcp = MCPOrchestrator()
 
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -398,7 +336,7 @@ class SRESentinel:
                 self.container_states[container_id] = container_state
             await self._publish_event(ContainerUpdateEvent(container=container_state))
 
-            await asyncio.sleep(5)
+            await asyncio.sleep(_STATS_INTERVAL_SECONDS)
 
     async def _publish_container_state(
         self, container: docker.models.containers.Container, service_name: str
@@ -495,7 +433,7 @@ class SRESentinel:
             memory_percent = (memory_usage / memory_limit) * 100.0
 
         networks = dict(stats.get("networks") or {})
-        for interface_name, interface_stats in networks.items():
+        for _, interface_stats in networks.items():
             if isinstance(interface_stats, dict):
                 rx_bytes = interface_stats.get("rx_bytes", 0.0)
                 tx_bytes = interface_stats.get("tx_bytes", 0.0)
@@ -585,7 +523,7 @@ class SRESentinel:
     ) -> None:
         """Check container logs for anomalies using AI analysis."""
         container_name = container.name or container.short_id
-        recent_logs = list(self.log_buffers[container_name])[-200:]
+        recent_logs = list(self.log_buffers[container_name])[-_RECENT_LOGS_COUNT:]
         log_chunk = "\n".join(item.line for item in recent_logs)
         if not log_chunk.strip():
             return

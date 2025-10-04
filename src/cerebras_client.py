@@ -5,67 +5,28 @@ Cerebras AI client for anomaly detection in container logs.
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Mapping
-from typing import Generator
 
-from cerebras.cloud.sdk import Cerebras
 from openai.types.chat import ChatCompletion
-from pydantic import BaseModel, Field, field_validator
 from rich.console import Console
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from sentinel_types import AnomalyDetectionResult, AnomalySeverity, AnomalyType
+from api_key_detector import fallback_secret_detection
+from openrouter_client import create_openrouter_client
+from sentinel_types import (
+    AnomalyDetectionResult,
+    AnomalySeverity,
+    AnomalyType,
+    CerebrasSettings,
+    CompletionMessage,
+    AnomalyPayload,
+)
 
 console = Console()
 
 
 class CerebrasClientError(RuntimeError):
     """Custom exception for Cerebras client errors."""
-
-
-class CerebrasSettings(BaseModel):
-    """Configuration settings for Cerebras API access."""
-
-    api_key: str = Field(description="API key for Cerebras authentication")
-    model: str = Field(
-        default="llama-4-scout-17b-16e-instruct",
-        description="Model name to use for analysis",
-    )
-
-    @classmethod
-    def from_env(cls) -> "CerebrasSettings":
-        """Create settings from environment variables."""
-        api_key = os.getenv("CEREBRAS_API_KEY")
-        if not api_key:
-            raise ValueError("CEREBRAS_API_KEY not found in environment")
-        return cls(
-            api_key=api_key,
-            model=os.getenv("CEREBRAS_MODEL", "llama-4-scout-17b-16e-instruct"),
-        )
-
-
-class CompletionMessage(BaseModel):
-    """Chat message structure for Cerebras API."""
-
-    role: str = Field(pattern="^(system|user|assistant)$")
-    content: str
-
-
-class AnomalyPayload(BaseModel):
-    """Expected anomaly detection response from Cerebras."""
-
-    is_anomaly: bool
-    confidence: float = Field(ge=0.0, le=1.0)
-    anomaly_type: str = Field(pattern="^(crash|error|warning|performance|none)$")
-    severity: str = Field(pattern="^(low|medium|high|critical)$")
-    summary: str
-
-    @field_validator("anomaly_type", "severity")
-    @classmethod
-    def normalize_fields(cls, v: str) -> str:
-        """Normalize fields to lowercase."""
-        return v.lower()
 
 
 _SYSTEM_PROMPT = """You are an expert SRE analyzing container logs for anomalies.
@@ -94,14 +55,50 @@ Recent logs (last 100 lines):
 
 Analyze for anomalies. Respond with JSON only."""
 
+_ENV_CLASSIFICATION_SYSTEM_PROMPT = """You are a security expert analyzing environment variable names.
+Classify which environment variable names likely contain sensitive information (passwords, API keys, tokens, secrets, credentials, etc.).
+
+Respond ONLY with a JSON object in this format:
+{
+    "sensitive_keys": ["KEY_NAME_1", "KEY_NAME_2"]
+}
+
+Include a key in "sensitive_keys" if it likely contains:
+- Passwords or credentials
+- API keys or tokens
+- Database connection strings with embedded passwords
+- Private keys or certificates
+- OAuth secrets
+- Encryption keys
+
+Common patterns to flag as sensitive:
+- Contains: "key", "secret", "password", "token", "auth", "credential", "private", "cert"
+- Database URLs that may embed passwords: "DATABASE_URL", "DB_URL", "MONGO_URL", "REDIS_URL"
+- Cloud provider credentials: "AWS_", "GCP_", "AZURE_"
+- Third-party API keys: "*_API_KEY", "*_TOKEN", "*_SECRET"
+
+DO NOT flag safe configuration like:
+- "NODE_ENV", "PORT", "LOG_LEVEL", "TIMEOUT", "MAX_CONNECTIONS", "DEBUG"
+- "HOSTNAME", "PATH", "HOME", "USER", "LANG"
+"""
+
+_ENV_CLASSIFICATION_USER_PROMPT = """Classify these environment variable names as sensitive or safe:
+
+{env_var_names}
+
+Respond with JSON only."""
+
 
 class CerebrasAnomalyDetector:
-    """Fast anomaly detection using Cerebras inference."""
+    """Fast anomaly detection using Cerebras inference via OpenRouter."""
 
     def __init__(self, settings: CerebrasSettings | None = None) -> None:
         """Initialize the anomaly detector with API settings."""
         self.settings = settings or CerebrasSettings.from_env()
-        self.client = Cerebras(api_key=self.settings.api_key)
+        self.client = create_openrouter_client(
+            api_key=self.settings.api_key,
+            base_url=self.settings.base_url
+        )
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10)
@@ -125,6 +122,11 @@ class CerebrasAnomalyDetector:
                 temperature=0.1,
                 max_completion_tokens=300,
                 response_format={"type": "json_object"},
+                extra_body={
+                    "provider": {
+                        "order": ["Cerebras"]
+                    }
+                }
             )
             anomaly = self._parse_completion(completion)
         except Exception as exc:
@@ -148,42 +150,6 @@ class CerebrasAnomalyDetector:
             console.print("[green]✓ No anomalies detected[/green]")
 
         return anomaly
-
-    def detect_anomaly_streaming(
-        self,
-        log_chunk: str,
-        service_name: str,
-        context: Mapping[str, object] | None = None,
-    ) -> Generator[str, None, None]:
-        """Stream partial Cerebras responses for real-time dashboards."""
-        messages = self._build_messages(log_chunk, service_name, context)
-
-        try:
-            stream = self.client.chat.completions.create(
-                model=self.settings.model,
-                messages=[msg.model_dump() for msg in messages],
-                temperature=0.1,
-                max_completion_tokens=300,
-                stream=True,
-            )
-            for chunk in stream:
-                chunk_dict = self._as_dict(chunk)
-                if not chunk_dict:
-                    continue
-
-                for choice in self._normalise_choices(chunk_dict):
-                    delta = self._as_dict(choice.get("delta"))
-                    if delta and (content := delta.get("content")):
-                        if isinstance(content, str):
-                            yield content
-
-                    message = self._as_dict(choice.get("message"))
-                    if message and (content := message.get("content")):
-                        if isinstance(content, str):
-                            yield content
-        except Exception as exc:
-            console.print(f"[red]Streaming error: {exc}[/red]")
-            yield json.dumps({"error": str(exc)})
 
     def _build_messages(
         self,
@@ -235,21 +201,82 @@ class CerebrasAnomalyDetector:
             summary=payload.summary,
         )
 
-    @staticmethod
-    def _as_dict(value: object) -> dict[str, object] | None:
-        """Safely convert a value to a dictionary if possible."""
-        if isinstance(value, Mapping):
-            return dict(value)
-        return None
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    def classify_sensitive_env_vars(
+        self, env_var_names: list[str], env_var_values: Mapping[str, str] | None = None
+    ) -> set[str]:
+        """
+        Classify which environment variable names are likely sensitive.
 
-    def _normalise_choices(
-        self, chunk_dict: Mapping[str, object]
-    ) -> list[Mapping[str, object]]:
-        """Extract and normalize choices from a streaming response chunk."""
-        choices = chunk_dict.get("choices")
-        if isinstance(choices, list):
-            return [choice for choice in choices if isinstance(choice, Mapping)]
-        return []
+        Uses Cerebras for fast, intelligent classification based on naming patterns.
+        Returns a set of env var names that should be redacted.
+
+        Args:
+            env_var_names: List of environment variable names to classify
+            env_var_values: Optional mapping of names to values for pattern-based fallback
+        """
+        if not env_var_names:
+            return set()
+
+        console.print(
+            f"[cyan]🔐 Classifying {len(env_var_names)} env vars with Cerebras...[/cyan]"
+        )
+
+        # Format env var names as a list
+        env_names_str = "\n".join(f"- {name}" for name in env_var_names)
+        user_prompt = _ENV_CLASSIFICATION_USER_PROMPT.format(
+            env_var_names=env_names_str
+        )
+
+        messages = [
+            CompletionMessage.model_validate(
+                {"role": "system", "content": _ENV_CLASSIFICATION_SYSTEM_PROMPT}
+            ),
+            CompletionMessage.model_validate({"role": "user", "content": user_prompt}),
+        ]
+
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.settings.model,
+                messages=[msg.model_dump() for msg in messages],
+                temperature=0.0,  # Deterministic classification
+                max_completion_tokens=500,
+                response_format={"type": "json_object"},
+                extra_body={
+                    "provider": {
+                        "order": ["Cerebras"]
+                    }
+                }
+            )
+
+            message = completion.choices[0].message
+            if message.content is None:
+                console.print("[yellow]⚠️  Empty response from Cerebras[/yellow]")
+                return fallback_secret_detection(env_var_names, env_var_values)
+
+            response_data = json.loads(message.content)
+            sensitive_keys = response_data.get("sensitive_keys", [])
+
+            if not isinstance(sensitive_keys, list):
+                console.print(
+                    "[yellow]⚠️  Invalid response format from Cerebras[/yellow]"
+                )
+                return fallback_secret_detection(env_var_names, env_var_values)
+
+            sensitive_set = {key for key in sensitive_keys if isinstance(key, str)}
+            console.print(
+                f"[green]✓ Classified {len(sensitive_set)}/{len(env_var_names)} as sensitive[/green]"
+            )
+
+            return sensitive_set
+
+        except Exception as exc:
+            console.print(
+                f"[yellow]⚠️  Error classifying env vars with Cerebras: {exc}[/yellow]"
+            )
+            return fallback_secret_detection(env_var_names, env_var_values)
 
 
 if __name__ == "__main__":
