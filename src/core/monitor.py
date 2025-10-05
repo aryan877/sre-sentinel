@@ -950,12 +950,13 @@ class SRESentinel:
                 if i < len(analysis.suggested_fixes)
                 else None
             )
-            priority = original_fix.priority if original_fix else 999
+            priority = getattr(original_fix, 'priority', 999)
 
             if priority <= 2 and not fix.success:  # Priority 1 and 2 are critical
                 all_critical_fixes_succeeded = False
+                action_name = getattr(original_fix, 'action', 'unknown')
                 console.print(
-                    f"[red]✗ Critical fix failed: {fix.action} - {fix.error or fix.message}[/red]"
+                    f"[red]✗ Critical fix failed: {action_name} - {fix.error or fix.message}[/red]"
                 )
 
         # Check if container is actually running (not just restarting)

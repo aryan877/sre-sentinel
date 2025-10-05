@@ -108,7 +108,6 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, AfterValidator
 
-
 __all__ = [
     # Base Classes
     "BaseModel",
@@ -166,9 +165,6 @@ class AnomalySeverity(str, Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
-
-
-from pydantic_core import core_schema
 
 
 def validate_fix_action_name(v: str) -> str:
