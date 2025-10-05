@@ -919,10 +919,23 @@ class SRESentinel:
         console.print("\n[bold cyan]📊 Step 4: Verifying system health...[/bold cyan]")
 
         is_healthy = await self.mcp.verify_health(
-            container_name, max_wait=_MAX_HEALTH_WAIT_SECONDS
+            container.name, max_wait=_MAX_HEALTH_WAIT_SECONDS
         )
 
-        if is_healthy:
+        # Additional check: verify that all critical fixes succeeded
+        all_critical_fixes_succeeded = True
+        for fix in fix_results:
+            if fix.priority <= 2 and not fix.success:  # Priority 1 and 2 are critical
+                all_critical_fixes_succeeded = False
+                console.print(
+                    f"[red]✗ Critical fix failed: {fix.action} - {fix.error or fix.message}[/red]"
+                )
+
+        # Check if container is actually running (not just restarting)
+        container.reload()
+        is_actually_running = container.status == "running"
+
+        if is_healthy and all_critical_fixes_succeeded and is_actually_running:
             console.print(f"\n[bold green]{'='*60}[/bold green]")
             console.print(
                 f"[bold green]✅ INCIDENT RESOLVED: {incident_id}[/bold green]"
@@ -933,6 +946,14 @@ class SRESentinel:
         else:
             console.print(f"\n[bold red]{'='*60}[/bold red]")
             console.print(f"[bold red]⚠️  INCIDENT UNRESOLVED: {incident_id}[/bold red]")
+            if not all_critical_fixes_succeeded:
+                console.print("[bold red]Some critical fixes failed[/bold red]")
+            if not is_actually_running:
+                console.print(
+                    f"[bold red]Container status: {container.status}[/bold red]"
+                )
+            if not is_healthy:
+                console.print("[bold red]Health check failed[/bold red]")
             console.print("[bold red]Manual intervention required[/bold red]")
             console.print(f"[bold red]{'='*60}[/bold red]\n")
             incident_record.status = IncidentStatus.UNRESOLVED

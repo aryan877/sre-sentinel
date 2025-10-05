@@ -104,6 +104,13 @@ app.get("/leak", (req, res) => {
   res.json({ message: "Memory leak triggered", arrays: leakyArray.length });
 });
 
+// Error endpoint (for demo)
+app.get("/error", (req, res) => {
+  console.log("Error endpoint triggered - throwing unhandled exception");
+  // Throw an unhandled exception
+  throw new Error("Demo unhandled exception for testing SRE Sentinel");
+});
+
 // Start server
 app.listen(port, () => {
   console.log(`Demo API listening on port ${port}`);

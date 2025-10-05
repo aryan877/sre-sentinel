@@ -20,27 +20,29 @@ fi
 # Menu
 echo "Choose a failure scenario:"
 echo ""
-echo "1) Kill Postgres container (connection failures)"
+echo "1) Trigger database connection errors (API logs errors)"
 echo "2) Trigger memory leak in API (OOM crash)"
 echo "3) Remove critical environment variable (config error)"
 echo "4) Max out container CPU (performance degradation)"
+echo "5) Trigger application exception (unhandled error)"
 echo ""
-read -p "Enter choice [1-4]: " choice
+read -p "Enter choice [1-5]: " choice
 
 case $choice in
     1)
         echo ""
-        echo "💥 Scenario 1: Killing Postgres container..."
-        docker kill demo-postgres 2>/dev/null || echo "Container already stopped"
-        echo "✓ Postgres killed. Expect connection failures in API."
+        echo "💥 Scenario 1: Triggering database connection errors..."
+        # Make API connect to wrong database to generate error logs
+        docker exec demo-api sh -c "curl -s http://localhost:3001/db-check > /dev/null" || true
+        echo "✓ Database connection errors triggered."
         echo ""
         echo "Watch the logs:"
         echo "  docker logs -f demo-api"
         echo ""
         echo "SRE Sentinel should:"
-        echo "  1. Detect connection errors within seconds"
+        echo "  1. Detect connection errors in logs"
         echo "  2. Analyze logs and docker-compose.yml"
-        echo "  3. Restart postgres container"
+        echo "  3. Suggest fixes for database connection"
         ;;
 
     2)
@@ -108,6 +110,21 @@ case $choice in
         echo "  3. Restart container or adjust CPU limits"
         ;;
 
+    5)
+        echo ""
+        echo "💥 Scenario 5: Triggering application exception..."
+        # Trigger an unhandled exception in the API
+        curl -s http://localhost:3001/error > /dev/null 2>&1 || true
+        echo "✓ Application exception triggered."
+        echo ""
+        echo "Watch the logs:"
+        echo "  docker logs -f demo-api"
+        echo ""
+        echo "SRE Sentinel should:"
+        echo "  1. Detect unhandled exception in logs"
+        echo "  2. Analyze error stack trace"
+        echo "  3. Suggest code fix or restart"
+        ;;
     *)
         echo "Invalid choice"
         exit 1
