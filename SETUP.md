@@ -141,34 +141,123 @@ This will:
 
 ### Understanding MCP Servers
 
-SRE Sentinel uses two MCP servers for container management:
+SRE Sentinel uses the Model Context Protocol (MCP) to securely interact with Docker containers through the MCP Gateway. The system includes two built-in MCP servers:
 
 1. **Docker Control Server** (`mcp-servers/docker-control/`)
 
-   - Provides tools for container management
-   - Handles restarts, health checks, resource updates, and log retrieval
+   Provides secure container management tools:
+
+   - `restart_container`: Safely restart containers with audit logging
+   - `health_check`: Check container status and health metrics
+   - `update_resources`: Modify CPU and memory limits
+   - `get_logs`: Retrieve recent log entries
+   - `exec_command`: Run diagnostic commands inside containers
 
 2. **Config Patcher Server** (`mcp-servers/config-patcher/`)
-   - Provides tools for configuration updates
-   - Handles environment variable updates
+
+   Handles configuration updates:
+
+   - `update_env_vars`: Update environment variables (recreates container)
+
+### MCP Gateway Architecture
+
+The MCP Gateway acts as a secure proxy between the AI system and Docker:
+
+```
+SRE Sentinel (Python) → MCP Gateway → MCP Servers → Docker API
+```
+
+Key features:
+
+- **Session Management**: Secure session-based communication
+- **Tool Discovery**: Automatic discovery of available tools
+- **Parameter Validation**: Strict validation of all inputs
+- **Audit Logging**: All operations are logged for security
+- **Isolation**: AI never directly accesses Docker socket
+
+### MCP Connection Details
+
+The Python orchestrator connects to the MCP Gateway using Server-Sent Events (SSE):
+
+1. **Session Initialization**: Establishes a session with protocol handshake
+2. **Tool Discovery**: Retrieves available tools and their schemas
+3. **Tool Execution**: Sends JSON-RPC 2.0 requests for tool execution
+4. **Response Handling**: Parses SSE responses and returns results
+
+### Testing MCP Connection
+
+Verify MCP Gateway is working:
+
+```bash
+# Check Gateway health
+curl http://localhost:8811/health
+
+# List available tools (requires session initialization)
+# See README.md for detailed MCP testing examples
+```
 
 ### Adding Custom MCP Servers
 
-1. Create a new MCP server in `mcp-servers/your-server/`
-2. Implement your tools following the MCP specification
-3. Add the server definition to `mcp-servers/catalog.yaml` (follow the existing entries for structure and metadata).
+1. **Create Server Directory**:
 
-4. Rebuild the MCP server images so the gateway can start the new server:
+   ```bash
+   mkdir mcp-servers/your-server
+   cd mcp-servers/your-server
+   ```
 
-```bash
-./mcp-servers/build-servers.sh
-```
+2. **Initialize Node.js Project**:
 
-5. Restart the MCP Gateway:
+   ```bash
+   npm init -y
+   npm install @modelcontextprotocol/sdk dockerode
+   ```
 
-```bash
-docker-compose restart mcp-gateway
-```
+3. **Implement Your Server**:
+
+   - Follow the MCP specification for tool definitions
+   - Implement proper input validation
+   - Use structured error responses
+   - Log to stderr (MCP standard)
+
+4. **Update Catalog**:
+   Add your server to `mcp-servers/catalog.yaml`:
+
+   ```yaml
+   your-server:
+     description: "Your custom server description"
+     title: "Your Server"
+     type: "server"
+     dateAdded: "2025-10-05T00:00:00Z"
+     image: "mcp-servers/your-server:latest"
+     tools:
+       - name: "your_tool"
+         description: "Tool description"
+     env:
+       - name: "NODE_ENV"
+         value: "production"
+     volumes:
+       - "/var/run/docker.sock:/var/run/docker.sock"
+     metadata:
+       category: "custom"
+       tags: ["custom", "tools"]
+       license: "MIT License"
+       owner: "Your Name"
+   ```
+
+5. **Build and Deploy**:
+
+   ```bash
+   # Build all MCP server images
+   ./mcp-servers/build-servers.sh
+
+   # Restart Gateway to load new server
+   docker-compose restart mcp-gateway
+   ```
+
+6. **Verify Integration**:
+   - Check Gateway logs for server loading
+   - Test tool discovery through the Python client
+   - Verify tool execution with proper parameters
 
 ## 8. Customization
 

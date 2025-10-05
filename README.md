@@ -43,29 +43,124 @@ SRE Sentinel is an AI-powered monitoring and self-healing system for containeriz
 
 ## 🛠️ MCP Integration
 
-SRE Sentinel uses the Model Context Protocol (MCP) to securely interact with container infrastructure:
+SRE Sentinel uses the Model Context Protocol (MCP) to securely interact with container infrastructure through the Docker MCP Gateway. This architecture provides a secure, audited, and extensible way to execute container operations.
+
+### MCP Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   SRE Sentinel  │───▶│  MCP Gateway    │───▶│  MCP Servers    │
+│   (Python)      │    │  (Docker)       │    │  (Node.js)      │
+│                 │    │                 │    │                 │
+│ - AI Analysis   │    │ - Session Mgmt  │    │ - Docker API    │
+│ - Fix Actions   │    │ - Tool Routing  │    │ - Config Mgmt   │
+│ - SSE Client    │    │ - Security      │    │ - Validation    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### MCP Gateway Connection
+
+The Python orchestrator connects to the MCP Gateway using Server-Sent Events (SSE) protocol:
+
+1. **Session Initialization**: Establishes a session with the MCP Gateway
+2. **Tool Discovery**: Automatically discovers available tools from all registered MCP servers
+3. **Dynamic Execution**: Executes tools with proper parameter validation and error handling
+4. **Security Isolation**: All container operations go through the Gateway's security layer
 
 ### MCP Servers
 
-1. **Docker Control Server** (`mcp-servers/docker-control/`)
+#### 1. Docker Control Server (`mcp-servers/docker-control/`)
 
-   - `restart_container`: Restart a Docker container
-   - `health_check`: Check container health status
-   - `update_resources`: Update CPU and memory limits
-   - `get_logs`: Retrieve recent container logs
-   - `exec_command`: Execute commands inside containers for diagnostics or remediation
+Provides secure Docker container management tools:
 
-2. **Config Patcher Server** (`mcp-servers/config-patcher/`)
-   - `update_env_vars`: Update environment variables for containers
+- **`restart_container`**: Restart a Docker container
+
+  - Parameters: `container_name` (required), `reason` (optional)
+  - Example: `{"container_name": "demo-api", "reason": "Memory leak detected"}`
+
+- **`health_check`**: Check container health status
+
+  - Parameters: `container_name` (required)
+  - Returns: Status, health state, restart count, start time
+
+- **`update_resources`**: Update CPU and memory limits
+
+  - Parameters: `container_name` (required), `resources` (required)
+  - Example: `{"container_name": "demo-api", "resources": {"memory": "1g", "cpu": "1.0"}}`
+
+- **`get_logs`**: Retrieve recent container logs
+
+  - Parameters: `container_name` (required), `tail` (optional, default: 100)
+  - Returns: Last N lines of container logs
+
+- **`exec_command`**: Execute commands inside containers
+  - Parameters: `container_name` (required), `command` (required, array), `timeout` (optional)
+  - Example: `{"container_name": "demo-api", "command": ["sh", "-c", "ps aux"], "timeout": 30}`
+
+#### 2. Config Patcher Server (`mcp-servers/config-patcher/`)
+
+Handles configuration updates for containers:
+
+- **`update_env_vars`**: Update environment variables
+  - Parameters: `container_name` (required), `env_updates` (required)
+  - Process: Commits container as image, recreates with new environment
+  - Example: `{"container_name": "demo-api", "env_updates": {"DEBUG": "true", "LOG_LEVEL": "info"}}`
 
 ### Dynamic Tool Discovery
 
-The MCP orchestrator automatically discovers available tools from the MCP gateway at runtime, eliminating the need for hardcoding tool definitions. This allows for:
+The MCP orchestrator (`src/core/orchestrator.py`) automatically discovers available tools:
 
-- Automatic tool discovery from MCP servers
-- Dynamic parameter validation based on tool schemas
-- Flexible tool execution with proper error handling
-- Easy addition of new MCP servers and tools
+```python
+# Tools are discovered at runtime from the MCP Gateway
+async def _discover_tools(self) -> None:
+    # Connects to MCP Gateway via SSE
+    # Retrieves tool schemas and descriptions
+    # Builds dynamic tool registry
+```
+
+This approach provides:
+
+- **Automatic Discovery**: No hardcoded tool definitions
+- **Schema Validation**: Dynamic parameter validation based on tool schemas
+- **Flexible Execution**: Proper error handling and response parsing
+- **Easy Extension**: Add new MCP servers without code changes
+
+### MCP Tool Execution Flow
+
+1. **AI Analysis**: Llama AI analyzes incidents and recommends `FixAction` objects
+2. **Tool Mapping**: `FixAction.action` maps to MCP tool names
+3. **Parameter Preparation**: `FixAction.details` contains JSON parameters for the tool
+4. **Gateway Execution**: Tool call is sent to MCP Gateway via SSE
+5. **Result Processing**: Response is parsed and returned as `FixExecutionResult`
+
+### Security Features
+
+- **Isolation**: AI never directly accesses Docker socket
+- **Audit Trail**: All tool executions are logged in the Gateway
+- **Parameter Validation**: Strict schema validation prevents injection
+- **Session Management**: Secure session-based communication
+- **Limited Scope**: Each tool has specific, limited capabilities
+
+### Adding New MCP Servers
+
+1. Create server in `mcp-servers/your-server/`
+2. Implement tools following MCP specification
+3. Add to `mcp-servers/catalog.yaml`:
+   ```yaml
+   your-server:
+     description: "Your server description"
+     image: "mcp-servers/your-server:latest"
+     tools:
+       - name: "your_tool"
+         description: "What your tool does"
+     volumes:
+       - "/var/run/docker.sock:/var/run/docker.sock"
+   ```
+4. Build and restart:
+   ```bash
+   ./mcp-servers/build-servers.sh
+   docker-compose restart mcp-gateway
+   ```
 
 ## 📋 Prerequisites
 
@@ -168,18 +263,110 @@ This will:
 
 ### Manual MCP Testing
 
-Test MCP tools directly:
+Test MCP tools directly through the Gateway:
 
 ```bash
-# Test container restart
-curl -X POST http://localhost:8811/mcp/call \
+# First, initialize a session
+curl -X POST http://localhost:8811/mcp \
   -H "Content-Type: application/json" \
-  -d '{"name": "restart_container", "arguments": {"container_name": "demo-api", "reason": "Manual test"}}'
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {},
+      "clientInfo": {"name": "test-client", "version": "1.0.0"}
+    }
+  }'
 
-# Test health check
-curl -X POST http://localhost:8811/mcp/call \
+# Then list available tools (using session ID from response)
+curl -X POST http://localhost:8811/mcp \
   -H "Content-Type: application/json" \
-  -d '{"name": "health_check", "arguments": {"container_name": "demo-api"}}'
+  -H "Mcp-Session-Id: YOUR_SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }'
+
+# Test container restart
+curl -X POST http://localhost:8811/mcp \
+  -H "Content-Type: application/json" \
+  -H "Mcp-Session-Id: YOUR_SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "restart_container",
+      "arguments": {"container_name": "demo-api", "reason": "Manual test"}
+    }
+  }'
+```
+
+### MCP Configuration
+
+The MCP Gateway is configured in `docker-compose.yml`:
+
+```yaml
+mcp-gateway:
+  image: docker/mcp-gateway:latest
+  command:
+    - --transport=streaming # Enable SSE for Python client
+    - --port=8811
+    - --catalog=/mcp-servers/catalog.yaml
+    - --enable-all-servers
+    - --verbose
+    - --log-calls
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock # Docker access
+    - ./mcp-servers:/mcp-servers:ro # Server definitions
+```
+
+### Python MCP Client Implementation
+
+The SRE Sentinel Python client implements the MCP protocol:
+
+1. **Session Management** (`src/core/orchestrator.py`):
+
+   ```python
+   async def _initialize_session(self, url: str) -> None:
+       # Initialize MCP session with Gateway
+       # Extract session ID from response headers
+       # Use session ID for subsequent requests
+   ```
+
+2. **Tool Discovery**:
+
+   ```python
+   async def _discover_tools(self) -> None:
+       # List all available tools from Gateway
+       # Parse tool schemas and descriptions
+       # Build dynamic tool registry
+   ```
+
+3. **Tool Execution**:
+   ```python
+   async def _call_tool(self, tool_name: str, args: dict) -> FixExecutionResult:
+       # Execute tool via MCP Gateway
+       # Handle SSE response format
+       # Parse and return results
+   ```
+
+### MCP Message Flow
+
+```
+1. Python Client (SRE Sentinel)
+   ↓ JSON-RPC 2.0 via SSE
+2. MCP Gateway (Docker)
+   ↓ Routes to appropriate server
+3. MCP Server (Node.js)
+   ↓ Executes Docker operation
+4. Returns result through Gateway
+   ↓ SSE response
+5. Python Client receives result
 ```
 
 ## 🛡️ Security
@@ -191,22 +378,112 @@ curl -X POST http://localhost:8811/mcp/call \
 
 ## 📈 Extending SRE Sentinel
 
-### Adding New MCP Servers
+### MCP Server Development
 
-1. Create a new MCP server in `mcp-servers/your-server/`
-2. Implement your tools following the MCP specification
-3. Add the server definition to `mcp-servers/catalog.yaml`
-4. Rebuild the MCP server images:
+#### Creating a New MCP Server
+
+1. **Create Server Directory**:
 
    ```bash
-   ./mcp-servers/build-servers.sh
+   mkdir mcp-servers/your-server
+   cd mcp-servers/your-server
    ```
 
-5. Restart the MCP Gateway to load the new server:
+2. **Initialize Node.js Project**:
 
    ```bash
+   npm init -y
+   npm install @modelcontextprotocol/sdk dockerode
+   ```
+
+3. **Implement Server** (`index.js`):
+
+   ```javascript
+   import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+   import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+   const server = new Server(
+     {
+       name: "your-server",
+       version: "1.0.0",
+     },
+     {
+       capabilities: { tools: {} },
+     }
+   );
+
+   // Define tools
+   server.setRequestHandler(ListToolsRequestSchema, async () => ({
+     tools: [
+       {
+         name: "your_tool",
+         description: "What your tool does",
+         inputSchema: {
+           type: "object",
+           properties: {
+             param1: { type: "string", description: "Parameter description" },
+           },
+           required: ["param1"],
+         },
+       },
+     ],
+   }));
+
+   // Handle tool calls
+   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+     const { name, arguments: args } = request.params;
+     // Implement your tool logic here
+     return {
+       content: [{ type: "text", text: JSON.stringify(result) }],
+     };
+   });
+
+   // Start server
+   const transport = new StdioServerTransport();
+   await server.connect(transport);
+   ```
+
+4. **Add to Catalog** (`mcp-servers/catalog.yaml`):
+
+   ```yaml
+   your-server:
+     description: "Your custom MCP server"
+     title: "Your Server"
+     type: "server"
+     dateAdded: "2025-10-05T00:00:00Z"
+     image: "mcp-servers/your-server:latest"
+     tools:
+       - name: "your_tool"
+         description: "What your tool does"
+     env:
+       - name: "NODE_ENV"
+         value: "production"
+     volumes:
+       - "/var/run/docker.sock:/var/run/docker.sock"
+     metadata:
+       category: "custom"
+       tags: ["your", "tags"]
+       license: "MIT License"
+       owner: "Your Name"
+   ```
+
+5. **Build and Deploy**:
+
+   ```bash
+   # Build all MCP servers
+   ./mcp-servers/build-servers.sh
+
+   # Restart Gateway to load new server
    docker-compose restart mcp-gateway
    ```
+
+#### Best Practices for MCP Servers
+
+- **Validation**: Always validate input parameters
+- **Error Handling**: Return structured error responses
+- **Security**: Never expose sensitive data in tool responses
+- **Logging**: Use stderr for logging (MCP standard)
+- **Idempotency**: Design tools to be idempotent where possible
 
 ### Custom AI Analysis
 

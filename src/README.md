@@ -120,3 +120,4 @@ This will start both the monitoring engine and the API server, providing:
 - AI-powered anomaly detection
 - Automated incident response
 - Dashboard accessible via WebSocket API
+- Secure MCP Gateway integration for container operations
