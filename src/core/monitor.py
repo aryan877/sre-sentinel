@@ -390,8 +390,27 @@ class SRESentinel:
                 f"[red]Unexpected error monitoring {service_name}: {exc}[/red]"
             )
             console.print(
-                f"[yellow]Monitoring for {service_name} has stopped. Other containers continue.[/yellow]"
+                f"[yellow]Attempting to restart monitoring for {service_name} in 10 seconds...[/yellow]"
             )
+            # Remove the current task from the monitoring tasks
+            self._monitoring_tasks.pop(container_id, None)
+
+            # Wait before restarting
+            await asyncio.sleep(10)
+
+            # Try to restart monitoring for this container
+            try:
+                # Check if container still exists
+                container = self.docker_client.containers.get(container_id)
+                await self._start_monitoring_container(container)
+            except docker.errors.NotFound:
+                console.print(
+                    f"[yellow]Container {service_name} no longer exists[/yellow]"
+                )
+            except Exception as restart_exc:
+                console.print(
+                    f"[red]Failed to restart monitoring for {service_name}: {restart_exc}[/red]"
+                )
 
     async def _track_container_stats(
         self, container: docker.models.containers.Container, service_name: str

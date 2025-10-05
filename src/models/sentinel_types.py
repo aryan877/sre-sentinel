@@ -104,8 +104,9 @@ from __future__ import annotations
 
 import os
 from enum import Enum
+from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, AfterValidator
 
 
 __all__ = [
@@ -167,18 +168,17 @@ class AnomalySeverity(str, Enum):
     CRITICAL = "critical"
 
 
-class FixActionName(str):
-    """Dynamic action name for automated fixes that can be applied to containers."""
+from pydantic_core import core_schema
 
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
 
-    @classmethod
-    def validate(cls, v):
-        if not isinstance(v, str):
-            raise TypeError("FixActionName must be a string")
-        return v
+def validate_fix_action_name(v: str) -> str:
+    """Validate that the fix action name is a string."""
+    if not isinstance(v, str):
+        raise TypeError("FixActionName must be a string")
+    return v
+
+
+FixActionName = Annotated[str, AfterValidator(validate_fix_action_name)]
 
 
 class IncidentStatus(str, Enum):
@@ -510,16 +510,20 @@ class ContainerState(BaseModel):
     cpu: float = Field(ge=0.0, description="Current CPU usage percentage (0-100)")
     memory: float = Field(ge=0.0, description="Current memory usage percentage (0-100)")
     network_rx: float = Field(
-        default=0.0, description="Network receive rate (bytes/sec, can be negative on counter reset)"
+        default=0.0,
+        description="Network receive rate (bytes/sec, can be negative on counter reset)",
     )
     network_tx: float = Field(
-        default=0.0, description="Network transmit rate (bytes/sec, can be negative on counter reset)"
+        default=0.0,
+        description="Network transmit rate (bytes/sec, can be negative on counter reset)",
     )
     disk_read: float = Field(
-        default=0.0, description="Disk read rate (bytes/sec, can be negative on counter reset)"
+        default=0.0,
+        description="Disk read rate (bytes/sec, can be negative on counter reset)",
     )
     disk_write: float = Field(
-        default=0.0, description="Disk write rate (bytes/sec, can be negative on counter reset)"
+        default=0.0,
+        description="Disk write rate (bytes/sec, can be negative on counter reset)",
     )
     timestamp: str = Field(description="ISO timestamp when this state was captured")
 

@@ -18,7 +18,7 @@ services:
     labels:
       - "sre-sentinel.monitor=true"
       - "sre-sentinel.service=api"
-    mem_limit: 256m
+    mem_limit: 512m
     cpus: 0.5
 
   # Demo database: PostgreSQL
