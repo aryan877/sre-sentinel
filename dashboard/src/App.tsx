@@ -278,9 +278,13 @@ function App() {
     const analysis = currentIncident.analysis;
     const severity = currentIncident.anomaly?.severity ?? "medium";
 
+    console.log('Raw detected_at:', currentIncident.detected_at);
+    console.log('Parsed Date object:', new Date(currentIncident.detected_at));
+    console.log('Converted to locale string:', new Date(currentIncident.detected_at).toLocaleString());
+
     return {
       id: currentIncident.id,
-      timestamp: currentIncident.detected_at,
+      timestamp: new Date(currentIncident.detected_at).toLocaleString(),
       severity,
       rootCause: analysis.root_cause ?? "Unknown root cause",
       explanation: analysis.explanation ?? "",
