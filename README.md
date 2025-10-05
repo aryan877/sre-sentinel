@@ -104,7 +104,7 @@ The MCP orchestrator automatically discovers available tools from the MCP gatewa
    ```
 
 5. **View the dashboard**:
-   Open http://localhost:8000 in your browser
+   Open http://localhost:3000 in your browser
 
 ## 🔧 Configuration
 

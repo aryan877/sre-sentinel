@@ -78,7 +78,7 @@ All containers should be in a "running" state.
 
 ### Check the Dashboard
 
-Open http://localhost:8000 in your browser to access the monitoring dashboard.
+Open http://localhost:3000 in your browser to access the monitoring dashboard.
 
 ### Check MCP Gateway Health
 

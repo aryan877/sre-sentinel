@@ -109,6 +109,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # Dashboard frontend
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        - VITE_WS_URL=ws://localhost:3000/ws
+    container_name: sre-sentinel-dashboard
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    depends_on:
+      - sre-sentinel
+
 volumes:
   postgres_data:
   redis_data:

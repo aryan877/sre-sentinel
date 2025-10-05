@@ -50,10 +50,24 @@ function App() {
   >({});
 
   const wsUrl = useMemo(() => {
+    // First try the explicit environment variable
     const explicit = import.meta.env.VITE_WS_URL;
     if (explicit) {
       return explicit;
     }
+
+    // In Docker, we need to connect through the proxy
+    // Check if we're in production (Docker) environment
+    if (
+      window.location.hostname !== "localhost" &&
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      // In Docker, use the proxied WebSocket endpoint
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${protocol}//${window.location.host}/ws`;
+    }
+
+    // Fallback for local development
     const origin = window.location.origin.replace(/^http/, "ws");
     return `${origin.replace(/\/?$/, "")}/ws`;
   }, []);
@@ -288,38 +302,35 @@ function App() {
   }, [currentIncident]);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-800 px-6 py-4">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
+      <header className="sticky top-0 z-50 border-b border-gray-800 bg-black">
+        <div className="flex items-center justify-between max-w-[1400px] mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
-            <Shield className="w-8 h-8 text-sentinel-blue" />
-            <div>
-              <h1 className="text-2xl font-bold">SRE Sentinel</h1>
-              <p className="text-sm text-gray-400">AI DevOps Copilot</p>
-            </div>
+            <Shield className="w-6 h-6 text-white" />
+            <h1 className="text-xl font-semibold">SRE Sentinel</h1>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
               <div
-                className={`w-2 h-2 rounded-full ${
-                  connected ? "bg-green-500 animate-pulse" : "bg-red-500"
+                className={`w-1.5 h-1.5 rounded-full ${
+                  connected ? "bg-green-500" : "bg-red-500"
                 }`}
               />
-              <span className="text-sm text-gray-400">
+              <span className="text-gray-400">
                 {connected ? "Connected" : "Disconnected"}
               </span>
             </div>
 
-            <div className="flex items-center gap-4 px-4 py-2 bg-gray-800 rounded-lg">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span className="text-sm">{healthyCount}</span>
+                <span className="text-gray-400">{healthyCount}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
-                <span className="text-sm">{criticalCount}</span>
+                <span className="text-gray-400">{criticalCount}</span>
               </div>
             </div>
           </div>
@@ -327,36 +338,36 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-[1400px] mx-auto px-6 py-8">
         {/* Tech Stack Banner */}
-        <div className="mb-8 bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-cyan-900/20 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-around">
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-400" />
+        <div className="mb-8 border border-gray-800 rounded-lg bg-[#0a0a0a] p-5">
+          <div className="flex items-center justify-around text-sm">
+            <div className="flex items-center gap-3">
+              <Zap className="w-4 h-4 text-yellow-500" />
               <div>
-                <p className="text-xs text-gray-400">Fast Detection</p>
-                <p className="font-semibold">Cerebras 2.6K tok/s</p>
+                <p className="text-gray-500 text-xs">Fast Detection</p>
+                <p className="font-medium text-white">Cerebras 2.6K tok/s</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Brain className="w-5 h-5 text-purple-400" />
+            <div className="flex items-center gap-3">
+              <Brain className="w-4 h-4 text-purple-500" />
               <div>
-                <p className="text-xs text-gray-400">Deep Analysis</p>
-                <p className="font-semibold">Llama 4 (10M context)</p>
+                <p className="text-gray-500 text-xs">Deep Analysis</p>
+                <p className="font-medium text-white">Llama 4 (10M context)</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-cyan-400" />
+            <div className="flex items-center gap-3">
+              <Wrench className="w-4 h-4 text-cyan-500" />
               <div>
-                <p className="text-xs text-gray-400">Secure Orchestration</p>
-                <p className="font-semibold">Docker MCP Gateway</p>
+                <p className="text-gray-500 text-xs">Secure Orchestration</p>
+                <p className="font-medium text-white">Docker MCP Gateway</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Container Status Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
           {containers.map((container) => (
             <ContainerStatus
               key={container.id}
@@ -374,7 +385,7 @@ function App() {
         </div>
 
         {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
           {/* Metrics Chart */}
           <MetricsChart
             data={primaryMetrics}
@@ -384,20 +395,20 @@ function App() {
           />
 
           {/* Recent Incidents */}
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+          <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Clock className="w-5 h-5 text-sentinel-yellow" />
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-400" />
                 Recent Incidents
               </h2>
-              <span className="text-sm text-gray-400">
+              <span className="text-xs text-gray-500">
                 {incidents.length} total
               </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {incidents.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
+                <p className="text-gray-500 text-center py-8 text-sm">
                   No incidents detected
                 </p>
               ) : (
@@ -407,18 +418,18 @@ function App() {
                   .map((incident) => (
                     <div
                       key={incident.id}
-                      className="p-3 bg-gray-800 rounded border border-gray-700 cursor-pointer hover:border-sentinel-blue transition-colors"
+                      className="p-3 bg-black rounded-md border border-gray-800 cursor-pointer hover:border-gray-700 transition-colors"
                       onClick={() => setCurrentIncident(incident)}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium">{incident.id}</span>
+                        <span className="font-medium text-sm">{incident.id}</span>
                         <span
-                          className={`text-xs px-2 py-1 rounded ${
+                          className={`text-xs px-2 py-0.5 rounded ${
                             incident.status === "resolved"
-                              ? "bg-green-900/30 text-green-400"
+                              ? "bg-green-500/10 text-green-500"
                               : incident.status === "analyzing"
-                              ? "bg-yellow-900/30 text-yellow-400"
-                              : "bg-red-900/30 text-red-400"
+                              ? "bg-yellow-500/10 text-yellow-500"
+                              : "bg-red-500/10 text-red-500"
                           }`}
                         >
                           {incident.status}
@@ -427,7 +438,7 @@ function App() {
                       <p className="text-sm text-gray-400">
                         {incident.service}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-600 mt-1">
                         {new Date(incident.detected_at).toLocaleString()}
                       </p>
                     </div>
@@ -438,10 +449,12 @@ function App() {
         </div>
 
         {/* AI Insights */}
-        <AIInsights
-          insight={currentInsight}
-          loading={currentIncident?.analysis == null && currentIncident != null}
-        />
+        <div className="mb-8">
+          <AIInsights
+            insight={currentInsight}
+            loading={currentIncident?.analysis == null && currentIncident != null}
+          />
+        </div>
 
         {/* Log Viewer */}
         <LogViewer

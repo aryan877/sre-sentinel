@@ -510,16 +510,16 @@ class ContainerState(BaseModel):
     cpu: float = Field(ge=0.0, description="Current CPU usage percentage (0-100)")
     memory: float = Field(ge=0.0, description="Current memory usage percentage (0-100)")
     network_rx: float = Field(
-        default=0.0, ge=0.0, description="Network receive rate (bytes/sec)"
+        default=0.0, description="Network receive rate (bytes/sec, can be negative on counter reset)"
     )
     network_tx: float = Field(
-        default=0.0, ge=0.0, description="Network transmit rate (bytes/sec)"
+        default=0.0, description="Network transmit rate (bytes/sec, can be negative on counter reset)"
     )
     disk_read: float = Field(
-        default=0.0, ge=0.0, description="Disk read rate (bytes/sec)"
+        default=0.0, description="Disk read rate (bytes/sec, can be negative on counter reset)"
     )
     disk_write: float = Field(
-        default=0.0, ge=0.0, description="Disk write rate (bytes/sec)"
+        default=0.0, description="Disk write rate (bytes/sec, can be negative on counter reset)"
     )
     timestamp: str = Field(description="ISO timestamp when this state was captured")
 

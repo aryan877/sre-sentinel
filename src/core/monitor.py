@@ -49,6 +49,7 @@ _LOG_CHECK_INTERVAL_DEFAULT = 5.0
 _STATS_INTERVAL_SECONDS = 5
 _MAX_HEALTH_WAIT_SECONDS = 30
 _RECENT_LOGS_COUNT = 200
+_CONTAINER_DISCOVERY_INTERVAL = 30
 
 
 def _utcnow() -> str:
@@ -101,6 +102,7 @@ class SRESentinel:
         self.container_states: MutableMapping[str, ContainerState] = {}
         self.incidents: list[Incident] = []
         self.previous_stats: dict[str, dict[str, object]] = {}
+        self._monitoring_tasks: dict[str, asyncio.Task] = {}
 
         self._compose_cache: str | None = None
         self._compose_path = (
@@ -123,38 +125,74 @@ class SRESentinel:
         return [incident.model_dump() for incident in self.incidents]
 
     async def monitor_loop(self) -> None:
-        """Main monitoring loop that runs continuously."""
+        """Main monitoring loop that continuously discovers and monitors containers."""
         self._loop = asyncio.get_running_loop()
 
         console.print("\n[bold green]🛡️  SRE Sentinel Starting...[/bold green]\n")
 
-        containers = self._get_monitored_containers()
-        if not containers:
-            console.print(
-                "[red]No containers found with label sre-sentinel.monitor=true[/red]"
-            )
-            console.print(
-                "[yellow]Add labels to docker-compose.yml and restart containers.[/yellow]"
-            )
-            return
-
-        console.print(f"[green]Monitoring {len(containers)} containers:[/green]")
-        for container in containers:
-            service_name = self._service_name(container)
-            console.print(f"  • {service_name} ({container.short_id})")
-        console.print()
-
-        tasks = [
-            asyncio.create_task(self._monitor_container(container))
-            for container in containers
-        ]
-
         try:
-            await asyncio.gather(*tasks)
+            while True:
+                # Discover containers with monitoring labels
+                containers = self._get_monitored_containers()
+
+                if not containers:
+                    console.print(
+                        "[yellow]No containers found with label sre-sentinel.monitor=true[/yellow]"
+                    )
+                    console.print(
+                        "[yellow]Waiting for containers to appear...[/yellow]"
+                    )
+                else:
+                    # Clean up completed tasks
+                    self._cleanup_completed_tasks()
+
+                    # Find new containers not currently being monitored
+                    current_ids = {c.id for c in containers}
+                    monitored_ids = set(self._monitoring_tasks.keys())
+                    new_container_ids = current_ids - monitored_ids
+
+                    # Start monitoring new containers
+                    for container in containers:
+                        if container.id in new_container_ids:
+                            service_name = self._service_name(container)
+                            console.print(
+                                f"[green]▶ Starting monitoring: {service_name} ({container.short_id})[/green]"
+                            )
+                            task = asyncio.create_task(
+                                self._monitor_container(container)
+                            )
+                            self._monitoring_tasks[container.id] = task
+
+                # Wait before next discovery cycle
+                await asyncio.sleep(_CONTAINER_DISCOVERY_INTERVAL)
+
         except asyncio.CancelledError:
-            for task in tasks:
+            console.print("[yellow]Monitoring loop cancelled, cleaning up...[/yellow]")
+            for task in self._monitoring_tasks.values():
                 task.cancel()
             raise
+
+    def _cleanup_completed_tasks(self) -> None:
+        """Remove completed monitoring tasks from the tracking dict."""
+        completed_ids = [
+            container_id
+            for container_id, task in self._monitoring_tasks.items()
+            if task.done()
+        ]
+
+        for container_id in completed_ids:
+            task = self._monitoring_tasks.pop(container_id)
+
+            # Log if the task ended with an exception
+            if task.done() and not task.cancelled():
+                try:
+                    exc = task.exception()
+                    if exc:
+                        console.print(
+                            f"[red]Monitoring task for container {container_id[:12]} ended with error: {exc}[/red]"
+                        )
+                except asyncio.CancelledError:
+                    pass
 
     async def _publish_event(self, event: BaseModel) -> None:
         """Publish an event to the message bus with proper serialization."""
@@ -192,24 +230,35 @@ class SRESentinel:
         service_name = self._service_name(container)
         container_id = container.id
 
-        await self._publish_container_state(container, service_name)
-
-        log_task = asyncio.create_task(
-            self._stream_container_logs(container, service_name)
-        )
-        stats_task = asyncio.create_task(
-            self._track_container_stats(container, service_name)
-        )
-
         try:
-            await asyncio.gather(log_task, stats_task)
-        finally:
-            if not log_task.done():
-                log_task.cancel()
-            if not stats_task.done():
-                stats_task.cancel()
-            if container_id:
-                self.container_states.pop(container_id, None)
+            await self._publish_container_state(container, service_name)
+
+            log_task = asyncio.create_task(
+                self._stream_container_logs(container, service_name)
+            )
+            stats_task = asyncio.create_task(
+                self._track_container_stats(container, service_name)
+            )
+
+            try:
+                await asyncio.gather(log_task, stats_task)
+            finally:
+                if not log_task.done():
+                    log_task.cancel()
+                if not stats_task.done():
+                    stats_task.cancel()
+                if container_id:
+                    self.container_states.pop(container_id, None)
+        except asyncio.CancelledError:
+            console.print(f"[yellow]Monitoring cancelled for {service_name}[/yellow]")
+            raise
+        except Exception as exc:
+            console.print(
+                f"[red]Unexpected error monitoring {service_name}: {exc}[/red]"
+            )
+            console.print(
+                f"[yellow]Monitoring for {service_name} has stopped. Other containers continue.[/yellow]"
+            )
 
     async def _track_container_stats(
         self, container: docker.models.containers.Container, service_name: str
@@ -318,23 +367,33 @@ class SRESentinel:
                 "timestamp": time.time(),
             }
 
-            container_state = ContainerState(
-                id=container_id,
-                name=container.name,
-                service=service_name,
-                status=status,
-                restarts=restart_count,
-                cpu=round(metrics.get("cpu_percent", 0.0), 2),
-                memory=round(metrics.get("memory_percent", 0.0), 2),
-                network_rx=round(network_rx_rate, 2),
-                network_tx=round(network_tx_rate, 2),
-                disk_read=round(disk_read_rate, 2),
-                disk_write=round(disk_write_rate, 2),
-                timestamp=_utcnow(),
-            )
-            if container_id:
-                self.container_states[container_id] = container_state
-            await self._publish_event(ContainerUpdateEvent(container=container_state))
+            try:
+                container_state = ContainerState(
+                    id=container_id,
+                    name=container.name,
+                    service=service_name,
+                    status=status,
+                    restarts=restart_count,
+                    cpu=round(metrics.get("cpu_percent", 0.0), 2),
+                    memory=round(metrics.get("memory_percent", 0.0), 2),
+                    network_rx=round(network_rx_rate, 2),
+                    network_tx=round(network_tx_rate, 2),
+                    disk_read=round(disk_read_rate, 2),
+                    disk_write=round(disk_write_rate, 2),
+                    timestamp=_utcnow(),
+                )
+                if container_id:
+                    self.container_states[container_id] = container_state
+                await self._publish_event(ContainerUpdateEvent(container=container_state))
+            except Exception as exc:
+                console.print(
+                    f"[red]Error creating container state for {service_name}: {exc}[/red]"
+                )
+                console.print(
+                    f"[yellow]Metrics: cpu={metrics.get('cpu_percent')}, mem={metrics.get('memory_percent')}, "
+                    f"net_rx={network_rx_rate}, net_tx={network_tx_rate}, "
+                    f"disk_r={disk_read_rate}, disk_w={disk_write_rate}[/yellow]"
+                )
 
             await asyncio.sleep(_STATS_INTERVAL_SECONDS)
 

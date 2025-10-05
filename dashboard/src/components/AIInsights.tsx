@@ -66,12 +66,12 @@ const priorityConfig = {
 export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
   if (loading) {
     return (
-      <div className="flex h-full min-h-[400px] items-center justify-center rounded-lg border border-gray-700 bg-gray-900/50 backdrop-blur-sm">
+      <div className="flex h-full min-h-[350px] items-center justify-center rounded-lg border border-gray-800 bg-[#0a0a0a]">
         <div className="text-center">
           <div className="mb-4 inline-flex items-center justify-center">
-            <Brain className="h-12 w-12 animate-pulse text-purple-400" />
+            <Brain className="h-8 w-8 animate-pulse text-purple-500" />
           </div>
-          <p className="text-lg font-medium text-gray-300">
+          <p className="text-base font-medium text-white">
             AI is analyzing incident...
           </p>
           <p className="mt-2 text-sm text-gray-500">
@@ -84,13 +84,13 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
 
   if (!insight) {
     return (
-      <div className="flex h-full min-h-[400px] items-center justify-center rounded-lg border border-gray-700 bg-gray-900/50 backdrop-blur-sm">
+      <div className="flex h-full min-h-[350px] items-center justify-center rounded-lg border border-gray-800 bg-[#0a0a0a]">
         <div className="text-center">
-          <Sparkles className="mx-auto mb-4 h-12 w-12 text-gray-600" />
-          <p className="text-lg font-medium text-gray-400">
+          <Sparkles className="mx-auto mb-4 h-8 w-8 text-gray-700" />
+          <p className="text-base font-medium text-gray-400">
             No incidents detected
           </p>
-          <p className="mt-2 text-sm text-gray-500">
+          <p className="mt-2 text-sm text-gray-600">
             AI insights will appear here when issues are found
           </p>
         </div>
@@ -101,26 +101,24 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
   const severityStyle = severityConfig[insight.severity];
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-700 bg-gray-900/50 backdrop-blur-sm">
+    <div className="overflow-hidden rounded-lg border border-gray-800 bg-[#0a0a0a]">
       {/* Header */}
-      <div className="border-b border-gray-700 bg-gradient-to-r from-purple-900/20 to-blue-900/20 p-6">
+      <div className="border-b border-gray-800 p-5">
         <div className="mb-4 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-purple-500/20 p-2">
-              <Sparkles className="h-6 w-6 text-purple-400" />
-            </div>
+            <Sparkles className="h-5 w-5 text-purple-500" />
             <div>
-              <h2 className="text-xl font-bold text-white">AI Analysis</h2>
-              <p className="mt-1 text-sm text-gray-400">
+              <h2 className="text-lg font-semibold text-white">AI Analysis</h2>
+              <p className="mt-1 text-xs text-gray-500">
                 Incident detected at {insight.timestamp}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div
-              className={`rounded-full px-3 py-1 ${severityStyle.bg} ${severityStyle.border} border`}
+              className={`rounded px-2 py-1 ${severityStyle.bg}`}
             >
-              <span className={`text-sm font-medium ${severityStyle.color}`}>
+              <span className={`text-xs font-medium ${severityStyle.color}`}>
                 {severityStyle.label} Severity
               </span>
             </div>
@@ -129,10 +127,10 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
 
         {/* Confidence Score */}
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-gray-400" />
-          <span className="text-sm text-gray-400">Confidence Score:</span>
+          <TrendingUp className="h-3.5 w-3.5 text-gray-500" />
+          <span className="text-xs text-gray-500">Confidence Score:</span>
           <div className="flex-1 max-w-xs">
-            <div className="h-2 overflow-hidden rounded-full bg-gray-700">
+            <div className="h-1.5 overflow-hidden rounded-full bg-gray-800">
               <div
                 className={`h-full transition-all ${
                   insight.confidence >= 80
@@ -145,45 +143,45 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
               />
             </div>
           </div>
-          <span className="text-sm font-semibold text-white">
+          <span className="text-xs font-semibold text-white">
             {insight.confidence}%
           </span>
         </div>
       </div>
 
-      <div className="p-6">
-        <div className="space-y-6">
+      <div className="p-5">
+        <div className="space-y-4">
           {/* Root Cause */}
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-              <h3 className="font-semibold text-white">Root Cause</h3>
+          <div className="rounded-lg border border-gray-800 bg-black p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <h3 className="font-semibold text-white text-sm">Root Cause</h3>
             </div>
-            <p className="text-gray-300">{insight.rootCause}</p>
+            <p className="text-gray-400 text-sm">{insight.rootCause}</p>
           </div>
 
           {/* Explanation */}
-          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Brain className="h-5 w-5 text-blue-400" />
-              <h3 className="font-semibold text-white">Explanation</h3>
+          <div className="rounded-lg border border-gray-800 bg-black p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Brain className="h-4 w-4 text-blue-500" />
+              <h3 className="font-semibold text-white text-sm">Explanation</h3>
             </div>
-            <p className="leading-relaxed text-gray-300">
+            <p className="leading-relaxed text-gray-400 text-sm">
               {insight.explanation}
             </p>
           </div>
 
           {/* Affected Components */}
-          <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
+          <div className="rounded-lg border border-gray-800 bg-black p-4">
             <div className="mb-3 flex items-center gap-2">
-              <Target className="h-5 w-5 text-yellow-400" />
-              <h3 className="font-semibold text-white">Affected Components</h3>
+              <Target className="h-4 w-4 text-yellow-500" />
+              <h3 className="font-semibold text-white text-sm">Affected Components</h3>
             </div>
             <div className="flex flex-wrap gap-2">
               {insight.affectedComponents.map((component, index) => (
                 <span
                   key={index}
-                  className="rounded-md bg-yellow-500/10 px-3 py-1 text-sm font-medium text-yellow-300 border border-yellow-500/20"
+                  className="rounded bg-yellow-500/10 px-2.5 py-1 text-xs font-medium text-yellow-400 border border-yellow-500/20"
                 >
                   {component}
                 </span>
@@ -192,24 +190,24 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
           </div>
 
           {/* Suggested Fixes */}
-          <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-            <div className="mb-4 flex items-center gap-2">
-              <Wrench className="h-5 w-5 text-green-400" />
-              <h3 className="font-semibold text-white">Suggested Fixes</h3>
+          <div className="rounded-lg border border-gray-800 bg-black p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-green-500" />
+              <h3 className="font-semibold text-white text-sm">Suggested Fixes</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {insight.suggestedFixes.map((fix, index) => {
                 const priorityStyle = priorityConfig[fix.priority];
                 return (
                   <div
                     key={index}
-                    className="rounded-lg border border-gray-700 bg-gray-800/50 p-4 transition-all hover:border-gray-600 hover:bg-gray-800"
+                    className="rounded-lg border border-gray-800 bg-[#0a0a0a] p-3 transition-all hover:border-gray-700"
                   >
                     <div className="mb-2 flex items-start justify-between">
-                      <h4 className="font-medium text-white">{fix.title}</h4>
+                      <h4 className="font-medium text-white text-sm">{fix.title}</h4>
                       <div className="flex items-center gap-2">
                         {fix.estimatedTime && (
-                          <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
                             <Clock className="h-3 w-3" />
                             {fix.estimatedTime}
                           </span>
@@ -221,7 +219,7 @@ export const AIInsights: React.FC<AIInsightsProps> = ({ insight, loading }) => {
                         </span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-400">{fix.description}</p>
+                    <p className="text-xs text-gray-500">{fix.description}</p>
                   </div>
                 );
               })}

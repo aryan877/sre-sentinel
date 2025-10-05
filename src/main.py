@@ -67,6 +67,11 @@ async def main() -> None:
         await asyncio.gather(monitor_task, api_task)
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down gracefully...[/yellow]")
+    except Exception as exc:
+        console.print(f"\n[red]Unexpected error in SRE Sentinel: {exc}[/red]")
+        console.print("[yellow]SRE Sentinel will attempt to shut down gracefully...[/yellow]")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
     finally:
         if not monitor_task.done():
             monitor_task.cancel()
