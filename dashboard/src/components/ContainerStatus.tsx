@@ -82,7 +82,7 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
 
   return (
     <div
-      className="relative overflow-hidden rounded-lg border border-gray-800 bg-[#0a0a0a] transition-all hover:border-gray-700"
+      className="relative overflow-hidden rounded-lg border border-[#3e3e42] bg-[#252526] transition-all hover:border-neutral-600"
     >
       <div className="p-4">
         {/* Header */}
@@ -90,7 +90,7 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-white">{name}</h3>
             {uptime && (
-              <p className="mt-1 text-xs text-gray-500">Uptime: {uptime}</p>
+              <p className="mt-1 text-xs text-neutral-500">Uptime: {uptime}</p>
             )}
           </div>
           <div
@@ -106,10 +106,10 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 gap-3">
           {/* CPU Usage */}
-          <div className="rounded-md bg-black border border-gray-800 p-3">
+          <div className="rounded-md bg-[#1e1e1e] border border-[#3e3e42] p-3">
             <div className="mb-2 flex items-center gap-1.5">
-              <Activity className="h-3 w-3 text-gray-500" />
-              <span className="text-xs font-medium text-gray-400">CPU</span>
+              <Activity className="h-3 w-3 text-neutral-500" />
+              <span className="text-xs font-medium text-neutral-400">CPU</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span
@@ -120,9 +120,9 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
               >
                 {cpuPercent.toFixed(1)}
               </span>
-              <span className="text-xs text-gray-600">%</span>
+              <span className="text-xs text-neutral-600">%</span>
             </div>
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-800">
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-neutral-800">
               <div
                 className={`h-full transition-all duration-300 ${
                   cpuPercent >= 80
@@ -137,10 +137,10 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
           </div>
 
           {/* Memory Usage */}
-          <div className="rounded-md bg-black border border-gray-800 p-3">
+          <div className="rounded-md bg-[#1e1e1e] border border-[#3e3e42] p-3">
             <div className="mb-2 flex items-center gap-1.5">
-              <Activity className="h-3 w-3 text-gray-500" />
-              <span className="text-xs font-medium text-gray-400">Memory</span>
+              <Activity className="h-3 w-3 text-neutral-500" />
+              <span className="text-xs font-medium text-neutral-400">Memory</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span
@@ -151,9 +151,9 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
               >
                 {memoryPercent.toFixed(1)}
               </span>
-              <span className="text-xs text-gray-600">%</span>
+              <span className="text-xs text-neutral-600">%</span>
             </div>
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-800">
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-neutral-800">
               <div
                 className={`h-full transition-all duration-300 ${
                   memoryPercent >= 85
@@ -168,21 +168,21 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
           </div>
 
           {/* Network I/O */}
-          <div className="rounded-md bg-black border border-gray-800 p-3">
+          <div className="rounded-md bg-[#1e1e1e] border border-[#3e3e42] p-3">
             <div className="mb-2 flex items-center gap-1.5">
-              <Activity className="h-3 w-3 text-gray-500" />
-              <span className="text-xs font-medium text-gray-400">Network</span>
+              <Activity className="h-3 w-3 text-neutral-500" />
+              <span className="text-xs font-medium text-neutral-400">Network</span>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">↓ RX</span>
-                <span className="text-xs font-mono text-gray-300">
+                <span className="text-xs text-neutral-600">↓ RX</span>
+                <span className="text-xs font-mono text-neutral-300">
                   {formatBytes(networkRx)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">↑ TX</span>
-                <span className="text-xs font-mono text-gray-300">
+                <span className="text-xs text-neutral-600">↑ TX</span>
+                <span className="text-xs font-mono text-neutral-300">
                   {formatBytes(networkTx)}
                 </span>
               </div>
@@ -190,23 +190,23 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
           </div>
 
           {/* Disk I/O */}
-          <div className="rounded-md bg-black border border-gray-800 p-3">
+          <div className="rounded-md bg-[#1e1e1e] border border-[#3e3e42] p-3">
             <div className="mb-2 flex items-center gap-1.5">
-              <Activity className="h-3 w-3 text-gray-500" />
-              <span className="text-xs font-medium text-gray-400">
+              <Activity className="h-3 w-3 text-neutral-500" />
+              <span className="text-xs font-medium text-neutral-400">
                 Disk I/O
               </span>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">Read</span>
-                <span className="text-xs font-mono text-gray-300">
+                <span className="text-xs text-neutral-600">Read</span>
+                <span className="text-xs font-mono text-neutral-300">
                   {formatBytes(diskRead)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">Write</span>
-                <span className="text-xs font-mono text-gray-300">
+                <span className="text-xs text-neutral-600">Write</span>
+                <span className="text-xs font-mono text-neutral-300">
                   {formatBytes(diskWrite)}
                 </span>
               </div>
@@ -215,10 +215,10 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
         </div>
 
         {/* Restart Count */}
-        <div className="mt-3 flex items-center justify-between rounded-md bg-black border border-gray-800 px-3 py-2">
+        <div className="mt-3 flex items-center justify-between rounded-md bg-[#1e1e1e] border border-[#3e3e42] px-3 py-2">
           <div className="flex items-center gap-1.5">
-            <RefreshCw className="h-3 w-3 text-gray-500" />
-            <span className="text-xs text-gray-400">Restarts</span>
+            <RefreshCw className="h-3 w-3 text-neutral-500" />
+            <span className="text-xs text-neutral-400">Restarts</span>
           </div>
           <span
             className={`text-xs font-semibold ${
@@ -226,7 +226,7 @@ export const ContainerStatus: React.FC<ContainerStatusProps> = ({
                 ? "text-red-400"
                 : restartCount > 2
                 ? "text-yellow-400"
-                : "text-gray-300"
+                : "text-neutral-300"
             }`}
           >
             {restartCount}

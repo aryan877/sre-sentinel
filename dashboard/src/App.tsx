@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import {
-  Shield,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -302,12 +301,12 @@ function App() {
   }, [currentIncident]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-[#1e1e1e] text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-gray-800 bg-black">
+      <header className="sticky top-0 z-50 border-b border-[#3e3e42] bg-[#1e1e1e]">
         <div className="flex items-center justify-between max-w-[1400px] mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
-            <Shield className="w-6 h-6 text-white" />
+            <img src="/sre-sentinel-logo.png" alt="SRE Sentinel" className="w-8 h-8" />
             <h1 className="text-xl font-semibold">SRE Sentinel</h1>
           </div>
 
@@ -318,7 +317,7 @@ function App() {
                   connected ? "bg-green-500" : "bg-red-500"
                 }`}
               />
-              <span className="text-gray-400">
+              <span className="text-neutral-400">
                 {connected ? "Connected" : "Disconnected"}
               </span>
             </div>
@@ -326,11 +325,11 @@ function App() {
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span className="text-gray-400">{healthyCount}</span>
+                <span className="text-neutral-400">{healthyCount}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
-                <span className="text-gray-400">{criticalCount}</span>
+                <span className="text-neutral-400">{criticalCount}</span>
               </div>
             </div>
           </div>
@@ -340,26 +339,26 @@ function App() {
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-6 py-8">
         {/* Tech Stack Banner */}
-        <div className="mb-8 border border-gray-800 rounded-lg bg-[#0a0a0a] p-5">
+        <div className="mb-8 border border-[#3e3e42] rounded-lg bg-[#252526] p-5">
           <div className="flex items-center justify-around text-sm">
             <div className="flex items-center gap-3">
               <Zap className="w-4 h-4 text-yellow-500" />
               <div>
-                <p className="text-gray-500 text-xs">Fast Detection</p>
+                <p className="text-neutral-500 text-xs">Fast Detection</p>
                 <p className="font-medium text-white">Cerebras 2.6K tok/s</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Brain className="w-4 h-4 text-purple-500" />
               <div>
-                <p className="text-gray-500 text-xs">Deep Analysis</p>
+                <p className="text-neutral-500 text-xs">Deep Analysis</p>
                 <p className="font-medium text-white">Llama 4 (10M context)</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Wrench className="w-4 h-4 text-cyan-500" />
               <div>
-                <p className="text-gray-500 text-xs">Secure Orchestration</p>
+                <p className="text-neutral-500 text-xs">Secure Orchestration</p>
                 <p className="font-medium text-white">Docker MCP Gateway</p>
               </div>
             </div>
@@ -395,20 +394,20 @@ function App() {
           />
 
           {/* Recent Incidents */}
-          <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-5">
+          <div className="bg-[#252526] border border-[#3e3e42] rounded-lg p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
+                <Clock className="w-4 h-4 text-neutral-400" />
                 Recent Incidents
               </h2>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-neutral-500">
                 {incidents.length} total
               </span>
             </div>
 
             <div className="space-y-2">
               {incidents.length === 0 ? (
-                <p className="text-gray-500 text-center py-8 text-sm">
+                <p className="text-neutral-500 text-center py-8 text-sm">
                   No incidents detected
                 </p>
               ) : (
@@ -418,7 +417,7 @@ function App() {
                   .map((incident) => (
                     <div
                       key={incident.id}
-                      className="p-3 bg-black rounded-md border border-gray-800 cursor-pointer hover:border-gray-700 transition-colors"
+                      className="p-3 bg-[#1e1e1e] rounded-md border border-[#3e3e42] cursor-pointer hover:border-neutral-600 transition-colors"
                       onClick={() => setCurrentIncident(incident)}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -435,10 +434,10 @@ function App() {
                           {incident.status}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-400">
+                      <p className="text-sm text-neutral-400">
                         {incident.service}
                       </p>
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-neutral-600 mt-1">
                         {new Date(incident.detected_at).toLocaleString()}
                       </p>
                     </div>
