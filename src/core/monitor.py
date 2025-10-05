@@ -845,6 +845,7 @@ class SRESentinel:
                 environment_vars=environment_vars,
                 container_stats=container_stats.model_dump(),
                 available_tools=available_tools,
+                container_name=container.name,  # Pass actual container name
             )
         except Exception as exc:
             console.print(f"[red]Error in root cause analysis: {exc}[/red]")

@@ -38,12 +38,14 @@ Given comprehensive system context, perform root cause analysis and provide acti
 
 Available MCP Gateway tools will be provided in the user message. Use only the tools listed there.
 
+IMPORTANT: When generating fixes, ALWAYS use the actual container name provided in the "Container Name" section of the context. Do NOT use the service name.
+
 For each fix, provide structured JSON parameters that match the tool's input schema.
 For example:
-- For restart_container: {"container_name": "service-name", "reason": "description"}
-- For update_env_vars: {"container_name": "service-name", "env_updates": {"KEY": "value"}}
-- For update_resources: {"container_name": "service-name", "resources": {"memory": "512m", "cpu": "0.5"}}
-- For exec_command: {"container_name": "service-name", "command": ["sh", "-c", "rm -rf /tmp/*.lock"], "timeout": 30}
+- For restart_container: {"container_name": "actual-container-name", "reason": "description"}
+- For update_env_vars: {"container_name": "actual-container-name", "env_updates": {"KEY": "value"}}
+- For update_resources: {"container_name": "actual-container-name", "resources": {"memory": "512m", "cpu": "0.5"}}
+- For exec_command: {"container_name": "actual-container-name", "command": ["sh", "-c", "rm -rf /tmp/*.lock"], "timeout": 30}
 
 Respond ONLY with a JSON object in this format:
 {
@@ -107,6 +109,7 @@ class LlamaRootCauseAnalyzer:
         service_code: str | None = None,
         container_stats: Mapping[str, object] | None = None,
         available_tools: str | None = None,
+        container_name: str | None = None,
     ) -> RootCauseAnalysis:
         """Perform deep root cause analysis with full system context."""
         context = self._build_context(
@@ -117,6 +120,7 @@ class LlamaRootCauseAnalyzer:
             service_code=service_code,
             container_stats=container_stats,
             available_tools=available_tools,
+            container_name=container_name,
         )
 
         console.print(
@@ -240,9 +244,13 @@ class LlamaRootCauseAnalyzer:
         service_code: str | None,
         container_stats: Mapping[str, object] | None,
         available_tools: str | None,
+        container_name: str | None,
     ) -> str:
         """Build comprehensive context for the AI model."""
         sections: list[str] = [f"# Anomaly Detected\n{anomaly_summary}\n"]
+
+        if container_name:
+            sections.append(f"\n# Container Name\n{container_name}")
 
         if available_tools:
             sections.append(f"\n# Available MCP Gateway Tools\n{available_tools}")
