@@ -770,7 +770,26 @@ class SRESentinel:
             console.print(
                 f"\n[red bold]🚨 CRITICAL ANOMALY DETECTED IN {service_name}[/red bold]"
             )
-            await self._handle_incident(container, service_name, anomaly)
+            # Check if there's already an active incident for this service
+            active_incident = None
+            for incident in self.incidents:
+                if incident.service == service_name and incident.status in {
+                    IncidentStatus.ANALYZING,
+                    IncidentStatus.RESOLVING,
+                }:
+                    active_incident = incident
+                    break
+
+            if active_incident:
+                console.print(
+                    f"[yellow]⚠️  Active incident already exists for {service_name}: {active_incident.id}[/yellow]"
+                )
+                # Update the existing incident with the new anomaly
+                active_incident.anomaly = anomaly
+                update_event = IncidentUpdateEvent(incident=active_incident)
+                await self._publish_event(update_event)
+            else:
+                await self._handle_incident(container, service_name, anomaly)
 
     async def _handle_incident(
         self,

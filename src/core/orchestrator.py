@@ -230,7 +230,7 @@ class MCPOrchestrator:
                 {"success": False, "message": "Auto-heal disabled"}
             )
 
-        if not self._session:
+        if not self._session_id:
             await self.initialize()
 
         try:

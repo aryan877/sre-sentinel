@@ -40,10 +40,16 @@ Respond ONLY with a JSON object in this format:
 }
 
 Common anomaly patterns:
-- Crashes: "FATAL", "segmentation fault", "killed", "OOM"
+- Crashes: "FATAL", "segmentation fault", "killed", "OOM", "heap out of memory", "JavaScript heap out of memory"
 - Errors: "ERROR", "Exception", "failed to", "connection refused"
 - Performance: "timeout", "slow query", "high latency", "memory leak"
 - Warnings: "deprecated", "retry", "fallback"
+
+Severity guidelines:
+- CRITICAL: "FATAL", "OOM", "heap out of memory", "segmentation fault", container crashes
+- HIGH: Multiple repeated errors, connection failures, service unavailable, "memory leak"
+- MEDIUM: Single errors, timeouts, performance degradation
+- LOW: Warnings, deprecation notices, single failed requests
 """
 
 _USER_PROMPT_TEMPLATE = """Service: {service}

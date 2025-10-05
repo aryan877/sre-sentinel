@@ -185,6 +185,7 @@ class IncidentStatus(str, Enum):
     """Status values for incident lifecycle tracking."""
 
     ANALYZING = "analyzing"
+    RESOLVING = "resolving"
     RESOLVED = "resolved"
     UNRESOLVED = "unresolved"
 
