@@ -203,7 +203,7 @@ class CerebrasSettings(BaseModel):
         description="Base URL for the API (OpenRouter)",
     )
     model: str = Field(
-        default="meta-llama/llama-3.1-8b-instruct",
+        default="meta-llama/llama-3.3-70b-instruct",
         description="Model name to use for analysis (small, fast model for anomaly detection)",
     )
 
@@ -216,7 +216,7 @@ class CerebrasSettings(BaseModel):
         return cls(
             api_key=api_key,
             base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-            model=os.getenv("CEREBRAS_MODEL", "meta-llama/llama-3.1-8b-instruct"),
+            model=os.getenv("CEREBRAS_MODEL", "meta-llama/llama-3.3-70b-instruct"),
         )
 
 
