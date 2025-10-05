@@ -924,8 +924,16 @@ class SRESentinel:
 
         # Additional check: verify that all critical fixes succeeded
         all_critical_fixes_succeeded = True
-        for fix in fix_results:
-            if fix.priority <= 2 and not fix.success:  # Priority 1 and 2 are critical
+        for i, fix in enumerate(fix_results):
+            # Get the priority from the original fix action
+            original_fix = (
+                analysis.suggested_fixes[i]
+                if i < len(analysis.suggested_fixes)
+                else None
+            )
+            priority = original_fix.priority if original_fix else 999
+
+            if priority <= 2 and not fix.success:  # Priority 1 and 2 are critical
                 all_critical_fixes_succeeded = False
                 console.print(
                     f"[red]✗ Critical fix failed: {fix.action} - {fix.error or fix.message}[/red]"
