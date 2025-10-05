@@ -57,25 +57,70 @@ def build_application(sentinel: SentinelAPI, event_bus: RedisEventBus) -> FastAP
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
         """WebSocket endpoint for real-time event streaming."""
-        await websocket.accept()
-
-        bootstrap_event = BootstrapEvent(
-            containers=sentinel.snapshot_containers(),
-            incidents=sentinel.snapshot_incidents(),
-        )
-        await websocket.send_text(_json_dump(bootstrap_event.model_dump()))
-
-        subscription = await event_bus.subscribe()
-
         try:
-            async for event in subscription:
-                await websocket.send_text(_json_dump(event))
+            await websocket.accept()
+
+            # Send bootstrap data with increased timeout
+            bootstrap_event = BootstrapEvent(
+                containers=sentinel.snapshot_containers(),
+                incidents=sentinel.snapshot_incidents(),
+            )
+            try:
+                await asyncio.wait_for(
+                    websocket.send_text(_json_dump(bootstrap_event.model_dump())),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                print("Bootstrap data send timed out")
+                await websocket.close(code=1013, reason="Server timeout")
+                return
+
+            # Subscribe to event bus with increased timeout
+            try:
+                subscription = await asyncio.wait_for(
+                    event_bus.subscribe(), timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                print("Event bus subscription timed out")
+                await websocket.close(code=1013, reason="Server timeout")
+                return
+
+            try:
+                async for event in subscription:
+                    try:
+                        await asyncio.wait_for(
+                            websocket.send_text(_json_dump(event)), timeout=10.0
+                        )
+                    except asyncio.TimeoutError:
+                        print("Event send timed out, continuing...")
+                        continue
+                    except WebSocketDisconnect:
+                        print("WebSocket disconnected during event send")
+                        break
+            except WebSocketDisconnect:
+                print("WebSocket disconnected normally")
+                pass
+            except asyncio.TimeoutError:
+                print("Event iteration timed out")
+            except asyncio.CancelledError:
+                print("WebSocket task cancelled")
+                raise
+            except Exception as e:
+                print(f"Error in event loop: {e}")
+            finally:
+                try:
+                    await subscription.close()
+                except Exception as e:
+                    print(f"Error closing subscription: {e}")
         except WebSocketDisconnect:
-            pass
-        except asyncio.CancelledError:
-            raise
-        finally:
-            await subscription.close()
+            print("WebSocket disconnected during handshake")
+        except Exception as e:
+            # Log the error but don't raise to avoid breaking the connection
+            print(f"WebSocket error: {e}")
+            try:
+                await websocket.close(code=1011, reason="Internal server error")
+            except:
+                pass
 
     return app
 

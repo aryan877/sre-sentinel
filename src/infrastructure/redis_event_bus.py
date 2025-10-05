@@ -33,6 +33,7 @@ class RedisEventBus:
         self._redis: redis.Redis | None = None
         self._pubsub: redis.client.PubSub | None = None
         self._channel_name = _EVENT_CHANNEL
+        self._subscription_count = 0
 
     async def connect(self) -> None:
         """Initialize Redis connection."""
@@ -83,9 +84,16 @@ class RedisEventBus:
         if not self._redis:
             raise RuntimeError("Redis not connected. Call connect() first.")
 
-        self._pubsub = self._redis.pubsub()
-        await self._pubsub.subscribe(self._channel_name)
-        return RedisSubscription(self._pubsub, self._redis)
+        try:
+            self._pubsub = self._redis.pubsub()
+            await self._pubsub.subscribe(self._channel_name)
+            console.print(
+                f"[green]✓ Subscribed to Redis channel: {_EVENT_CHANNEL}[/green]"
+            )
+            return RedisSubscription(self._pubsub, self._redis)
+        except Exception as exc:
+            console.print(f"[red]Failed to subscribe to Redis channel: {exc}[/red]")
+            raise
 
     async def get_event_history(self, limit: int = 100) -> list[dict[str, object]]:
         """Get historical events from Redis list."""
@@ -133,6 +141,9 @@ class RedisSubscription:
                                 yield event
                             except json.JSONDecodeError:
                                 yield {"data": message["data"], "type": "raw"}
+            except asyncio.CancelledError:
+                console.print("[yellow]Redis subscription cancelled[/yellow]")
+                break
             except Exception as exc:
                 console.print(f"[red]Error in subscription: {exc}[/red]")
                 await asyncio.sleep(_ERROR_RETRY_DELAY)
@@ -151,6 +162,8 @@ class RedisSubscription:
         if self._pubsub:
             await self._pubsub.unsubscribe(_EVENT_CHANNEL)
             await self._pubsub.close()
+        if self._redis:
+            await self._redis.close()
 
 
 async def create_redis_event_bus(

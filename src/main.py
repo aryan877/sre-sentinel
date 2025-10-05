@@ -59,25 +59,26 @@ async def main() -> None:
     config = uvicorn.Config(app, host=api_host, port=api_port, log_level="info")
     server = uvicorn.Server(config)
 
+    # Start the monitor loop in the background
     monitor_task = asyncio.create_task(sentinel.monitor_loop())
-    api_task = asyncio.create_task(server.serve())
 
     try:
-        # Run both tasks concurrently
-        await asyncio.gather(monitor_task, api_task)
+        # Start the API server
+        await server.serve()
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down gracefully...[/yellow]")
     except Exception as exc:
         console.print(f"\n[red]Unexpected error in SRE Sentinel: {exc}[/red]")
-        console.print("[yellow]SRE Sentinel will attempt to shut down gracefully...[/yellow]")
+        console.print(
+            "[yellow]SRE Sentinel will attempt to shut down gracefully...[/yellow]"
+        )
         import traceback
+
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
     finally:
         if not monitor_task.done():
             monitor_task.cancel()
         server.should_exit = True
-        if not api_task.done():
-            await api_task
         await event_bus.disconnect()
 
 

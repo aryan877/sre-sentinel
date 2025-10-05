@@ -49,7 +49,7 @@ _LOG_CHECK_INTERVAL_DEFAULT = 5.0
 _STATS_INTERVAL_SECONDS = 5
 _MAX_HEALTH_WAIT_SECONDS = 30
 _RECENT_LOGS_COUNT = 200
-_CONTAINER_DISCOVERY_INTERVAL = 30
+# Removed - no longer needed with Docker events
 
 
 def _utcnow() -> str:
@@ -125,52 +125,185 @@ class SRESentinel:
         return [incident.model_dump() for incident in self.incidents]
 
     async def monitor_loop(self) -> None:
-        """Main monitoring loop that continuously discovers and monitors containers."""
+        """Main monitoring loop using Docker events for real-time container discovery."""
         self._loop = asyncio.get_running_loop()
 
         console.print("\n[bold green]🛡️  SRE Sentinel Starting...[/bold green]\n")
 
+        # Initial discovery of existing containers
+        containers = self._get_monitored_containers()
+        if containers:
+            console.print(
+                f"[cyan]🔍 Found {len(containers)} existing containers to monitor[/cyan]"
+            )
+            for container in containers:
+                await self._start_monitoring_container(container)
+        else:
+            console.print(
+                "[yellow]No containers found with label sre-sentinel.monitor=true[/yellow]"
+            )
+            console.print(
+                "[yellow]Waiting for containers via Docker events...[/yellow]"
+            )
+
+        # Start Docker events listener for real-time container discovery
+        console.print("[cyan]📡 Listening for Docker container events...[/cyan]")
+
         try:
-            while True:
-                # Discover containers with monitoring labels
-                containers = self._get_monitored_containers()
-
-                if not containers:
-                    console.print(
-                        "[yellow]No containers found with label sre-sentinel.monitor=true[/yellow]"
-                    )
-                    console.print(
-                        "[yellow]Waiting for containers to appear...[/yellow]"
-                    )
-                else:
-                    # Clean up completed tasks
-                    self._cleanup_completed_tasks()
-
-                    # Find new containers not currently being monitored
-                    current_ids = {c.id for c in containers}
-                    monitored_ids = set(self._monitoring_tasks.keys())
-                    new_container_ids = current_ids - monitored_ids
-
-                    # Start monitoring new containers
-                    for container in containers:
-                        if container.id in new_container_ids:
-                            service_name = self._service_name(container)
-                            console.print(
-                                f"[green]▶ Starting monitoring: {service_name} ({container.short_id})[/green]"
-                            )
-                            task = asyncio.create_task(
-                                self._monitor_container(container)
-                            )
-                            self._monitoring_tasks[container.id] = task
-
-                # Wait before next discovery cycle
-                await asyncio.sleep(_CONTAINER_DISCOVERY_INTERVAL)
-
+            await self._listen_docker_events()
         except asyncio.CancelledError:
             console.print("[yellow]Monitoring loop cancelled, cleaning up...[/yellow]")
             for task in self._monitoring_tasks.values():
                 task.cancel()
             raise
+
+    async def _start_monitoring_container(
+        self, container: docker.models.containers.Container
+    ) -> None:
+        """Start monitoring a container if not already monitored."""
+        if container.id not in self._monitoring_tasks:
+            service_name = self._service_name(container)
+            console.print(
+                f"[green]▶ Starting monitoring: {service_name} ({container.short_id})[/green]"
+            )
+            task = asyncio.create_task(self._monitor_container(container))
+            self._monitoring_tasks[container.id] = task
+
+    async def _listen_docker_events(self) -> None:
+        """Listen to Docker events for real-time container lifecycle changes."""
+        while True:
+            try:
+                console.print("[cyan]📡 Connecting to Docker events stream...[/cyan]")
+
+                # Create a separate thread for the Docker events stream
+                event_queue = asyncio.Queue()
+
+                def _event_stream_thread():
+                    try:
+                        event_stream = self.docker_client.events(
+                            decode=True,
+                            filters={
+                                "type": "container",
+                                "label": "sre-sentinel.monitor=true",
+                            },
+                        )
+                        for event in event_stream:
+                            # Use thread-safe method to put events in queue
+                            asyncio.run_coroutine_threadsafe(
+                                event_queue.put(event), self._loop
+                            )
+                    except Exception as exc:
+                        asyncio.run_coroutine_threadsafe(
+                            event_queue.put({"error": str(exc)}), self._loop
+                        )
+
+                # Start the event stream thread
+                thread = threading.Thread(target=_event_stream_thread, daemon=True)
+                thread.start()
+
+                console.print("[green]✅ Connected to Docker events stream[/green]")
+
+                # Process events from the queue
+                while True:
+                    try:
+                        # Wait for events with timeout to check thread health
+                        event = await asyncio.wait_for(event_queue.get(), timeout=5.0)
+
+                        if "error" in event:
+                            raise Exception(
+                                f"Docker events stream error: {event['error']}"
+                            )
+
+                        await self._handle_docker_event(event)
+
+                    except asyncio.TimeoutError:
+                        # Check if thread is still alive
+                        if not thread.is_alive():
+                            console.print(
+                                "[red]Docker events thread died, restarting...[/red]"
+                            )
+                            break
+                        continue
+
+            except asyncio.TimeoutError:
+                console.print("[red]Timeout connecting to Docker events stream[/red]")
+                console.print("[yellow]Reconnecting in 5 seconds...[/yellow]")
+                await asyncio.sleep(5)
+            except docker.errors.DockerException as exc:
+                console.print(f"[red]Docker connection error: {exc}[/red]")
+                console.print("[yellow]Reconnecting in 5 seconds...[/yellow]")
+                await asyncio.sleep(5)
+            except Exception as exc:
+                console.print(
+                    f"[red]Unexpected error in Docker events listener: {exc}[/red]"
+                )
+                console.print("[yellow]Reconnecting in 10 seconds...[/yellow]")
+                await asyncio.sleep(10)
+
+    async def _handle_docker_event(self, event: dict[str, object]) -> None:
+        """Handle a single Docker event."""
+        action = event.get("Action", "")
+        container_id = event.get("Actor", {}).get("ID", "")
+
+        if not container_id:
+            return
+
+        # Only process events for containers with our monitoring label
+        if not self._has_monitor_label(container_id):
+            return
+
+        if action == "start":
+            # New container started - begin monitoring
+            try:
+                container = self.docker_client.containers.get(container_id)
+                await self._start_monitoring_container(container)
+            except docker.errors.NotFound:
+                console.print(
+                    f"[yellow]Container {container_id[:12]} already removed[/yellow]"
+                )
+
+        elif action in {"die", "kill", "stop", "pause"}:
+            # Container stopped/paused - cleanup will happen in monitoring task
+            self._cleanup_completed_tasks()
+
+            # For stopped containers, we might want to restart monitoring if they come back
+            if action == "stop":
+                console.print(f"[yellow]Container {container_id[:12]} stopped[/yellow]")
+
+        elif action == "destroy":
+            # Container removed - cleanup monitoring task
+            if container_id in self._monitoring_tasks:
+                task = self._monitoring_tasks.pop(container_id)
+                task.cancel()
+                console.print(
+                    f"[yellow]Container {container_id[:12]} destroyed, stopped monitoring[/yellow]"
+                )
+
+            # Also clean up container state
+            self.container_states.pop(container_id, None)
+
+        elif action == "restart":
+            # Container restarted - continue monitoring the same container
+            console.print(f"[cyan]Container {container_id[:12]} restarted[/cyan]")
+            try:
+                container = self.docker_client.containers.get(container_id)
+                if container_id not in self._monitoring_tasks:
+                    await self._start_monitoring_container(container)
+            except docker.errors.NotFound:
+                console.print(
+                    f"[yellow]Container {container_id[:12]} disappeared during restart[/yellow]"
+                )
+
+    def _has_monitor_label(self, container_id: str) -> bool:
+        """Check if a container has the monitoring label."""
+        try:
+            container = self.docker_client.containers.get(container_id)
+            labels = container.labels or {}
+            return labels.get("sre-sentinel.monitor") == "true"
+        except docker.errors.NotFound:
+            return False
+        except Exception:
+            return False
 
     def _cleanup_completed_tasks(self) -> None:
         """Remove completed monitoring tasks from the tracking dict."""
@@ -384,7 +517,9 @@ class SRESentinel:
                 )
                 if container_id:
                     self.container_states[container_id] = container_state
-                await self._publish_event(ContainerUpdateEvent(container=container_state))
+                await self._publish_event(
+                    ContainerUpdateEvent(container=container_state)
+                )
             except Exception as exc:
                 console.print(
                     f"[red]Error creating container state for {service_name}: {exc}[/red]"
